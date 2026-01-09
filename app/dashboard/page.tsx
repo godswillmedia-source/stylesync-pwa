@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   useEffect(() => {
     const sessionToken = localStorage.getItem('session_token');
@@ -30,6 +31,17 @@ export default function Dashboard() {
     }
 
     setUserEmail(email || '');
+
+    // Check for successful payment
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('success') === 'true') {
+      setShowSuccessMessage(true);
+      // Clean up URL
+      window.history.replaceState({}, document.title, '/dashboard');
+      // Hide message after 5 seconds
+      setTimeout(() => setShowSuccessMessage(false), 5000);
+    }
+
     fetchBookings();
   }, [router]);
 
@@ -133,6 +145,27 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-8">
+        {/* Success Message */}
+        {showSuccessMessage && (
+          <div className="mb-6 bg-green-50 border-2 border-green-200 rounded-lg p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">🎉</span>
+              <div>
+                <h3 className="font-bold text-green-800">Subscription Activated!</h3>
+                <p className="text-sm text-green-700">
+                  Welcome to StyleSync Pro! Your subscription is now active.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowSuccessMessage(false)}
+              className="text-green-600 hover:text-green-800 text-xl"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* Sync Button */}
         <div className="mb-6 flex justify-between items-center">
           <h2 className="text-2xl font-bold">Your Bookings</h2>

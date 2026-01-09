@@ -22,37 +22,55 @@ export default function Settings() {
     }
 
     setUserEmail(email || '');
-    // TODO: Fetch subscription status from agent
+
+    // Fetch subscription status from agent
+    fetchSubscriptionStatus();
   }, [router]);
 
-  const handleSubscribe = async () => {
-    setIsProcessing(true);
-
+  const fetchSubscriptionStatus = async () => {
     try {
       const sessionToken = localStorage.getItem('session_token');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_AGENT_URL}/payment/subscribe`,
+        `${process.env.NEXT_PUBLIC_AGENT_URL}/subscription`,
         {
-          method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
             Authorization: `Bearer ${sessionToken}`,
           },
         }
       );
 
+      if (response.ok) {
+        const data = await response.json();
+        setSubscriptionStatus(data.subscription_status || 'trial');
+      }
+    } catch (error) {
+      console.error('Error fetching subscription status:', error);
+    }
+  };
+
+  const handleSubscribe = async () => {
+    setIsProcessing(true);
+
+    try {
+      const response = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: userEmail,
+        }),
+      });
+
       if (!response.ok) {
         throw new Error('Failed to create checkout session');
       }
 
-      const { sessionId } = await response.json();
-      const stripe = await stripePromise;
+      const { url } = await response.json();
 
-      if (stripe) {
-        const { error } = await stripe.redirectToCheckout({ sessionId });
-        if (error) {
-          throw error;
-        }
+      // Redirect to Stripe Checkout
+      if (url) {
+        window.location.href = url;
       }
     } catch (error) {
       console.error('Payment error:', error);
@@ -111,7 +129,7 @@ export default function Settings() {
                 7-Day Free Trial
               </p>
               <p className="text-sm text-amber-700">
-                Your trial is active. Subscribe now for $10/month to continue after the trial ends.
+                Your trial is active. Subscribe now for $9.99/month to continue after the trial ends.
               </p>
             </div>
           )}
@@ -125,7 +143,7 @@ export default function Settings() {
                 </p>
               </div>
               <p className="text-2xl font-bold text-primary">
-                $10<span className="text-sm text-gray-600">/mo</span>
+                $9.99<span className="text-sm text-gray-600">/mo</span>
               </p>
             </div>
 
