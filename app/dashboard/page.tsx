@@ -49,7 +49,7 @@ export default function Dashboard() {
     try {
       const sessionToken = localStorage.getItem('session_token');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_AGENT_URL}?action=bookings`,
+        `${process.env.NEXT_PUBLIC_AGENT_URL}/bookings`,
         {
           headers: {
             Authorization: `Bearer ${sessionToken}`,
@@ -76,7 +76,7 @@ export default function Dashboard() {
     try {
       const sessionToken = localStorage.getItem('session_token');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_AGENT_URL}?action=sync`,
+        `${process.env.NEXT_PUBLIC_AGENT_URL}/sync/manual`,
         {
           method: 'POST',
           headers: {
