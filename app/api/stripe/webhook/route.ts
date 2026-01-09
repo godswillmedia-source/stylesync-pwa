@@ -50,9 +50,9 @@ export async function POST(request: Request) {
             event_type: 'checkout.session.completed',
             customer_email: userEmail,
             subscription_id: subscription.id,
-            customer_id: subscription.customer,
+            customer_id: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
             subscription_status: subscription.status,
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_end: subscription.current_period_end ? new Date((subscription.current_period_end as number) * 1000).toISOString() : null,
           }),
         });
 
@@ -76,9 +76,9 @@ export async function POST(request: Request) {
             event_type: event.type,
             customer_email: customerEmail,
             subscription_id: subscription.id,
-            customer_id: subscription.customer,
+            customer_id: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
             subscription_status: subscription.status,
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_end: subscription.current_period_end ? new Date((subscription.current_period_end as number) * 1000).toISOString() : null,
           }),
         });
 
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
             event_type: 'customer.subscription.deleted',
             customer_email: customerEmail,
             subscription_id: subscription.id,
-            customer_id: subscription.customer,
+            customer_id: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
             subscription_status: 'canceled',
             current_period_end: null,
           }),
