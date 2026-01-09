@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --primary: #2596be;
-  --secondary: #1a7a99;
-  --accent: #2596be;
+  --primary: #cdf545;
+  --secondary: #b8e030;
+  --accent: #cdf545;
 }
 
 body {
@@ -36,7 +36,7 @@ button.bg-red-500 * {
 
 /* Loading spinner */
 .spinner {
-  border: 3px solid rgba(37, 150, 190, 0.1);
+  border: 3px solid rgba(205, 245, 69, 0.1);
   border-top-color: var(--primary);
   border-radius: 50%;
   width: 40px;
