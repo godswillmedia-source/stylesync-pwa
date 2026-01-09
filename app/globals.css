@@ -23,10 +23,10 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, li {
   color: #000000;
 }
 
-/* Keep white text only on buttons with bg colors */
+/* Black text on lime green buttons */
 .btn-primary,
 .btn-primary * {
-  color: #ffffff !important;
+  color: #000000 !important;
 }
 
 button.bg-red-500,
