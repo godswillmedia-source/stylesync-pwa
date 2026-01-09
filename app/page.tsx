@@ -73,7 +73,13 @@ export default function Home() {
 
       // Clean URL and redirect
       window.history.replaceState({}, document.title, '/');
-      router.push('/dashboard');
+
+      // New users must go to payment first
+      if (is_new_user) {
+        router.push('/payment');
+      } else {
+        router.push('/dashboard');
+      }
     } catch (error) {
       console.error('Login error:', error);
       alert(`Login failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again.`);
