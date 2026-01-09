@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: 'StyleSync - Automatic Salon Booking Sync',
   description: 'Automatically sync your salon bookings to Google Calendar',
   manifest: '/manifest.json',
-  themeColor: '#8B5CF6',
+  themeColor: '#000000',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
   appleWebApp: {
     capable: true,
