@@ -44,8 +44,42 @@ export default function Dashboard() {
       setTimeout(() => setShowSuccessMessage(false), 5000);
     }
 
-    fetchBookings();
+    // Verify payment status before loading dashboard
+    verifyPaymentStatus();
   }, [router]);
+
+  const verifyPaymentStatus = async () => {
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_AGENT_URL}?action=check_subscription`,
+        {
+          headers: {
+            Authorization: `Bearer ${sessionToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to check subscription');
+      }
+
+      const { subscription_status, trial_active } = await response.json();
+
+      // Redirect to payment if not subscribed and no trial
+      if (subscription_status !== 'active' && !trial_active) {
+        router.push('/payment');
+        return;
+      }
+
+      // Load bookings if payment verified
+      fetchBookings();
+    } catch (error) {
+      console.error('Error verifying payment:', error);
+      // On error, redirect to payment page to be safe
+      router.push('/payment');
+    }
+  };
 
   const fetchBookings = async () => {
     try {
