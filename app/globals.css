@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --primary: #8B5CF6;
-  --secondary: #EC4899;
-  --accent: #F59E0B;
+  --primary: #2596be;
+  --secondary: #1a7a99;
+  --accent: #2596be;
 }
 
 body {
@@ -14,11 +14,29 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color: #000000;
+  background-color: #ffffff;
+}
+
+/* Force black text globally */
+h1, h2, h3, h4, h5, h6, p, span, div, label, li {
+  color: #000000;
+}
+
+/* Keep white text only on buttons with bg colors */
+.btn-primary,
+.btn-primary * {
+  color: #ffffff !important;
+}
+
+button.bg-red-500,
+button.bg-red-500 * {
+  color: #ffffff !important;
 }
 
 /* Loading spinner */
 .spinner {
-  border: 3px solid rgba(139, 92, 246, 0.1);
+  border: 3px solid rgba(37, 150, 190, 0.1);
   border-top-color: var(--primary);
   border-radius: 50%;
   width: 40px;
@@ -38,7 +56,8 @@ body {
 }
 
 .btn-secondary {
-  @apply bg-gray-200 text-gray-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors;
+  @apply bg-gray-200 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors;
+  color: #000000 !important;
 }
 
 /* Card styles */

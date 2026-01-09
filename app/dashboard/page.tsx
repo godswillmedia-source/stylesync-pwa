@@ -20,6 +20,8 @@ export default function Dashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [reviewingBooking, setReviewingBooking] = useState<Booking | null>(null);
+  const [editedBooking, setEditedBooking] = useState<Booking | null>(null);
 
   useEffect(() => {
     const sessionToken = localStorage.getItem('session_token');
@@ -121,6 +123,82 @@ export default function Dashboard() {
       hour: 'numeric',
       minute: '2-digit',
     });
+  };
+
+  const handleReviewClick = (booking: Booking) => {
+    setReviewingBooking(booking);
+    setEditedBooking({ ...booking });
+  };
+
+  const handleApproveBooking = async () => {
+    if (!editedBooking) return;
+
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_AGENT_URL}?action=approve_booking`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${sessionToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            booking_id: editedBooking.id,
+            customer_name: editedBooking.customer_name,
+            service: editedBooking.service,
+            appointment_time: editedBooking.appointment_time,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to approve booking');
+      }
+
+      alert('Booking approved and synced to calendar!');
+      setReviewingBooking(null);
+      await fetchBookings();
+    } catch (error) {
+      console.error('Error approving booking:', error);
+      alert('Failed to approve booking. Please try again.');
+    }
+  };
+
+  const handleRejectBooking = async () => {
+    if (!reviewingBooking) return;
+
+    if (!confirm('Are you sure you want to reject this booking?')) {
+      return;
+    }
+
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_AGENT_URL}?action=reject_booking`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${sessionToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            booking_id: reviewingBooking.id,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to reject booking');
+      }
+
+      alert('Booking rejected and removed.');
+      setReviewingBooking(null);
+      await fetchBookings();
+    } catch (error) {
+      console.error('Error rejecting booking:', error);
+      alert('Failed to reject booking. Please try again.');
+    }
   };
 
   return (
@@ -244,7 +322,10 @@ export default function Dashboard() {
                     <span className="text-xs text-green-600">Auto-synced</span>
                   )}
                   {booking.review_required && (
-                    <button className="text-sm text-primary hover:underline">
+                    <button
+                      onClick={() => handleReviewClick(booking)}
+                      className="text-sm text-primary hover:underline"
+                    >
                       Review →
                     </button>
                   )}
@@ -265,6 +346,83 @@ export default function Dashboard() {
           </ul>
         </div>
       </main>
+
+      {/* Review Modal */}
+      {reviewingBooking && editedBooking && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+            <h2 className="text-2xl font-bold mb-4">Review Booking</h2>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Customer Name
+                </label>
+                <input
+                  type="text"
+                  value={editedBooking.customer_name}
+                  onChange={(e) =>
+                    setEditedBooking({ ...editedBooking, customer_name: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Service
+                </label>
+                <input
+                  type="text"
+                  value={editedBooking.service}
+                  onChange={(e) =>
+                    setEditedBooking({ ...editedBooking, service: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Appointment Time
+                </label>
+                <input
+                  type="datetime-local"
+                  value={editedBooking.appointment_time.slice(0, 16)}
+                  onChange={(e) =>
+                    setEditedBooking({
+                      ...editedBooking,
+                      appointment_time: new Date(e.target.value).toISOString(),
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleApproveBooking}
+                className="flex-1 btn-primary"
+              >
+                ✓ Approve & Sync
+              </button>
+              <button
+                onClick={handleRejectBooking}
+                className="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors"
+              >
+                ✗ Reject
+              </button>
+              <button
+                onClick={() => setReviewingBooking(null)}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
