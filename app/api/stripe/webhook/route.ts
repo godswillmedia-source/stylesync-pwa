@@ -40,7 +40,8 @@ export async function POST(request: Request) {
         const userEmail = session.customer_email || session.metadata?.userEmail;
 
         // Get subscription details
-        const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+        const subscriptionResponse = await stripe.subscriptions.retrieve(session.subscription as string);
+        const subscription = subscriptionResponse as any; // Type assertion for API compatibility
 
         // Forward to agent to update database
         await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}/webhook/stripe`, {
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
             subscription_id: subscription.id,
             customer_id: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
             subscription_status: subscription.status,
-            current_period_end: subscription.current_period_end ? new Date((subscription.current_period_end as number) * 1000).toISOString() : null,
+            current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
           }),
         });
 
@@ -61,12 +62,13 @@ export async function POST(request: Request) {
 
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as any; // Type assertion for API compatibility
         console.log(`Subscription ${event.type}:`, subscription.id);
 
         // Get customer email
-        const customer = await stripe.customers.retrieve(subscription.customer as string);
-        const customerEmail = 'email' in customer ? customer.email : null;
+        const customerResponse = await stripe.customers.retrieve(subscription.customer as string);
+        const customer = customerResponse as any;
+        const customerEmail = customer.email || null;
 
         // Forward to agent
         await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}/webhook/stripe`, {
@@ -78,7 +80,7 @@ export async function POST(request: Request) {
             subscription_id: subscription.id,
             customer_id: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
             subscription_status: subscription.status,
-            current_period_end: subscription.current_period_end ? new Date((subscription.current_period_end as number) * 1000).toISOString() : null,
+            current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
           }),
         });
 
@@ -86,12 +88,13 @@ export async function POST(request: Request) {
       }
 
       case 'customer.subscription.deleted': {
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as any; // Type assertion for API compatibility
         console.log('Subscription cancelled:', subscription.id);
 
         // Get customer email
-        const customer = await stripe.customers.retrieve(subscription.customer as string);
-        const customerEmail = 'email' in customer ? customer.email : null;
+        const customerResponse = await stripe.customers.retrieve(subscription.customer as string);
+        const customer = customerResponse as any;
+        const customerEmail = customer.email || null;
 
         // Forward to agent
         await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}/webhook/stripe`, {
@@ -117,12 +120,13 @@ export async function POST(request: Request) {
       }
 
       case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice;
+        const invoice = event.data.object as any; // Type assertion for API compatibility
         console.log('Payment failed:', invoice.id);
 
         // Get customer email and notify via agent
-        const customer = await stripe.customers.retrieve(invoice.customer as string);
-        const customerEmail = 'email' in customer ? customer.email : null;
+        const customerResponse = await stripe.customers.retrieve(invoice.customer as string);
+        const customer = customerResponse as any;
+        const customerEmail = customer.email || null;
 
         await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}/webhook/stripe`, {
           method: 'POST',
