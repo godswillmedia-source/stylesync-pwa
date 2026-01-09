@@ -86,12 +86,18 @@ export default function Dashboard() {
       );
 
       if (!response.ok) {
-        throw new Error('Sync failed');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Sync error response:', errorData);
+        throw new Error(errorData.error || 'Sync failed');
       }
 
       const { synced_count, total_processed } = await response.json();
 
-      alert(`Synced ${synced_count} of ${total_processed} bookings!`);
+      if (total_processed === 0) {
+        alert('No new booking emails found. Make sure you have unread emails from StyleSeat (noreply@styleseat.com) in your inbox.');
+      } else {
+        alert(`Synced ${synced_count} of ${total_processed} bookings!`);
+      }
       await fetchBookings(); // Refresh list
     } catch (error) {
       console.error('Sync error:', error);
