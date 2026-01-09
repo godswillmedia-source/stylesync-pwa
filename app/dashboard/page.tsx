@@ -94,7 +94,7 @@ export default function Dashboard() {
       const { synced_count, total_processed } = await response.json();
 
       if (total_processed === 0) {
-        alert('No new booking emails found. Make sure you have unread emails from StyleSeat (noreply@styleseat.com) in your inbox.');
+        alert('No new booking emails found. Make sure you have emails from StyleSeat (info@style.styleseat.com) in your inbox.');
       } else {
         alert(`Synced ${synced_count} of ${total_processed} bookings!`);
       }
