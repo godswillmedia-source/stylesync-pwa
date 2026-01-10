@@ -15,6 +15,7 @@ interface AIAssistantProps {
 export default function AIAssistant({ sessionToken }: AIAssistantProps) {
   const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [isActive, setIsActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentTranscript, setCurrentTranscript] = useState('');
@@ -26,11 +27,13 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const greetingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const finalTranscriptRef = useRef<string>('');
 
-  // Initialize Speech Recognition and Text-to-Speech
+  // Initialize Speech Recognition
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // Speech Recognition Setup
       if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         recognitionRef.current = new SpeechRecognition();
@@ -39,32 +42,39 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
         recognitionRef.current.lang = 'en-US';
 
         recognitionRef.current.onresult = (event: any) => {
-          let transcript = '';
+          let interimTranscript = '';
+          let finalTranscript = '';
+
           for (let i = event.resultIndex; i < event.results.length; i++) {
-            transcript += event.results[i][0].transcript;
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalTranscript += transcript;
+            } else {
+              interimTranscript += transcript;
+            }
           }
-          setCurrentTranscript(transcript);
+
+          if (finalTranscript) {
+            finalTranscriptRef.current = finalTranscript;
+            setCurrentTranscript(finalTranscript);
+            // Reset silence timer when user speaks
+            resetSilenceTimer();
+          } else {
+            setCurrentTranscript(interimTranscript);
+          }
         };
 
         recognitionRef.current.onerror = (event: any) => {
           console.error('Speech recognition error:', event.error);
-          if (event.error === 'no-speech') {
-            // Automatically restart if no speech detected
-            if (isListening) {
-              recognitionRef.current.start();
-            }
-          }
         };
 
         recognitionRef.current.onend = () => {
-          // Auto-restart if still in listening mode
-          if (isListening) {
+          if (isActive && !isSpeaking) {
             recognitionRef.current.start();
           }
         };
       }
 
-      // Audio Context for visualization
       if ('AudioContext' in window || 'webkitAudioContext' in window) {
         const AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
         audioContextRef.current = new AudioContext();
@@ -74,6 +84,12 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+      if (greetingTimerRef.current) {
+        clearTimeout(greetingTimerRef.current);
       }
     };
   }, []);
@@ -120,34 +136,64 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
     setAudioLevel(0);
   };
 
-  const toggleVoiceMode = async () => {
+  const resetSilenceTimer = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
+    // After 2 seconds of silence, process the transcript
+    silenceTimerRef.current = setTimeout(() => {
+      if (finalTranscriptRef.current.trim()) {
+        askQuestion(finalTranscriptRef.current);
+        finalTranscriptRef.current = '';
+        setCurrentTranscript('');
+      }
+    }, 2000);
+  };
+
+  const activateAssistant = async () => {
     if (!recognitionRef.current) {
       alert('Voice input is not supported in your browser. Please use Chrome or Edge.');
       return;
     }
 
-    if (isListening) {
-      // Stop listening
-      recognitionRef.current.stop();
+    if (isActive) {
+      // Deactivate
+      setIsActive(false);
       setIsListening(false);
-
-      // Process the transcript if there's any
-      if (currentTranscript.trim()) {
-        await askQuestion(currentTranscript);
-        setCurrentTranscript('');
+      recognitionRef.current.stop();
+      if (greetingTimerRef.current) {
+        clearTimeout(greetingTimerRef.current);
+      }
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
       }
     } else {
-      // Start listening
+      // Activate
+      setIsActive(true);
       setIsListening(true);
+      finalTranscriptRef.current = '';
       setCurrentTranscript('');
       recognitionRef.current.start();
+
+      // If user doesn't say anything in 3 seconds, greet them
+      greetingTimerRef.current = setTimeout(() => {
+        if (!finalTranscriptRef.current.trim()) {
+          askQuestion('__greeting__');
+        }
+      }, 3000);
     }
   };
 
   const askQuestion = async (questionText: string) => {
-    if (!questionText.trim()) return;
+    if (!questionText.trim() && questionText !== '__greeting__') return;
 
+    setIsListening(false);
     setIsSpeaking(true);
+
+    // Cancel greeting timer if it's still running
+    if (greetingTimerRef.current) {
+      clearTimeout(greetingTimerRef.current);
+    }
 
     try {
       const response = await fetch(
@@ -161,6 +207,7 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
           body: JSON.stringify({
             question: questionText,
             conversation_history: conversationHistory,
+            is_greeting: questionText === '__greeting__',
           }),
         }
       );
@@ -170,92 +217,104 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
       }
 
       const data = await response.json();
-      const newMessage: Message = {
-        question: questionText,
-        answer: data.answer,
-        timestamp: new Date(),
-      };
 
-      setConversationHistory((prev) => [...prev, newMessage]);
+      if (questionText !== '__greeting__') {
+        const newMessage: Message = {
+          question: questionText,
+          answer: data.answer,
+          timestamp: new Date(),
+        };
+        setConversationHistory((prev) => [...prev, newMessage]);
+      }
+
       setCurrentAnswer(data.answer);
 
-      // Play OpenAI TTS audio if available, otherwise fallback to browser speech
+      // Play OpenAI TTS audio
       if (data.audio) {
-        playAudio(data.audio);
+        await playAudio(data.audio);
       } else {
-        speakAnswer(data.answer);
+        await speakAnswer(data.answer);
+      }
+
+      // After AI finishes speaking, resume listening
+      setIsSpeaking(false);
+      if (isActive) {
+        setIsListening(true);
       }
     } catch (error) {
       console.error('Error asking AI assistant:', error);
       const errorMsg = 'Sorry, I encountered an error. Please try again.';
       setCurrentAnswer(errorMsg);
-      speakAnswer(errorMsg);
-    }
-  };
-
-  const playAudio = (audioBase64: string) => {
-    try {
-      // Convert base64 to audio blob
-      const audioData = atob(audioBase64);
-      const audioArray = new Uint8Array(audioData.length);
-      for (let i = 0; i < audioData.length; i++) {
-        audioArray[i] = audioData.charCodeAt(i);
+      await speakAnswer(errorMsg);
+      setIsSpeaking(false);
+      if (isActive) {
+        setIsListening(true);
       }
-      const audioBlob = new Blob([audioArray], { type: 'audio/mpeg' });
-      const audioUrl = URL.createObjectURL(audioBlob);
-
-      // Create and play audio element
-      audioElementRef.current = new Audio(audioUrl);
-
-      audioElementRef.current.onplay = () => {
-        setIsSpeaking(true);
-        simulateSpeakingAnimation();
-      };
-
-      audioElementRef.current.onended = () => {
-        setIsSpeaking(false);
-        URL.revokeObjectURL(audioUrl);
-      };
-
-      audioElementRef.current.onerror = () => {
-        setIsSpeaking(false);
-        URL.revokeObjectURL(audioUrl);
-      };
-
-      audioElementRef.current.play();
-    } catch (error) {
-      console.error('Audio playback error:', error);
-      setIsSpeaking(false);
     }
   };
 
-  const speakAnswer = (text: string) => {
-    if ('speechSynthesis' in window) {
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
+  const playAudio = (audioBase64: string): Promise<void> => {
+    return new Promise((resolve) => {
+      try {
+        const audioData = atob(audioBase64);
+        const audioArray = new Uint8Array(audioData.length);
+        for (let i = 0; i < audioData.length; i++) {
+          audioArray[i] = audioData.charCodeAt(i);
+        }
+        const audioBlob = new Blob([audioArray], { type: 'audio/mpeg' });
+        const audioUrl = URL.createObjectURL(audioBlob);
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
+        audioElementRef.current = new Audio(audioUrl);
 
-      utterance.onstart = () => {
-        setIsSpeaking(true);
-        simulateSpeakingAnimation();
-      };
+        audioElementRef.current.onplay = () => {
+          simulateSpeakingAnimation();
+        };
 
-      utterance.onend = () => {
-        setIsSpeaking(false);
-      };
+        audioElementRef.current.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
 
-      utterance.onerror = () => {
-        setIsSpeaking(false);
-      };
+        audioElementRef.current.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
 
-      window.speechSynthesis.speak(utterance);
-    } else {
-      setIsSpeaking(false);
-    }
+        audioElementRef.current.play();
+      } catch (error) {
+        console.error('Audio playback error:', error);
+        resolve();
+      }
+    });
+  };
+
+  const speakAnswer = (text: string): Promise<void> => {
+    return new Promise((resolve) => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.95; // Slightly slower for natural pace
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+
+        utterance.onstart = () => {
+          simulateSpeakingAnimation();
+        };
+
+        utterance.onend = () => {
+          resolve();
+        };
+
+        utterance.onerror = () => {
+          resolve();
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } else {
+        resolve();
+      }
+    });
   };
 
   const simulateSpeakingAnimation = () => {
@@ -276,7 +335,6 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
     "Who are my most frequent clients?",
   ];
 
-  // Generate wave bars based on audio level
   const generateWaveBars = () => {
     const bars = [];
     const barCount = 5;
@@ -316,7 +374,6 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
         )}
       </div>
 
-      {/* Conversation History */}
       {showHistory && conversationHistory.length > 0 && (
         <div className="mb-4 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-4">
           <h3 className="font-semibold mb-2">Conversation History</h3>
@@ -333,17 +390,17 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
         </div>
       )}
 
-      {/* Voice Orb with Animated Waves */}
       <div className="flex flex-col items-center justify-center mb-6">
-        {/* Voice Orb */}
         <div className="relative mb-4">
           <button
-            onClick={toggleVoiceMode}
+            onClick={activateAssistant}
             className={`relative w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
               isListening
                 ? 'bg-[#cdf545] shadow-lg shadow-[#cdf545]/50 scale-110'
                 : isSpeaking
                 ? 'bg-black shadow-lg shadow-black/50 scale-110'
+                : isActive
+                ? 'bg-gray-300 shadow-md'
                 : 'bg-gray-200 hover:bg-gray-300'
             }`}
             style={{
@@ -358,7 +415,6 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
           </button>
         </div>
 
-        {/* Status Text */}
         {isListening && (
           <p className="text-lg font-semibold text-gray-700 mb-2">
             Listening...
@@ -369,20 +425,18 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
             Speaking...
           </p>
         )}
-        {!isListening && !isSpeaking && (
+        {!isActive && !isListening && !isSpeaking && (
           <p className="text-sm text-gray-500 mb-2">
-            Tap to talk with AI assistant
+            Tap to start conversation
           </p>
         )}
 
-        {/* Current Transcript */}
         {currentTranscript && (
           <div className="mt-2 p-3 bg-gray-50 rounded-lg max-w-md">
             <p className="text-sm text-gray-700">{currentTranscript}</p>
           </div>
         )}
 
-        {/* Current Answer */}
         {currentAnswer && (
           <div className="mt-4 p-4 bg-gray-50 rounded-lg max-w-md">
             <p className="text-sm text-gray-800 whitespace-pre-wrap">{currentAnswer}</p>
@@ -390,7 +444,6 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
         )}
       </div>
 
-      {/* Quick Action Buttons */}
       <div className="mb-4">
         <p className="text-sm text-gray-600 mb-2">Quick Questions:</p>
         <div className="flex flex-wrap gap-2">
