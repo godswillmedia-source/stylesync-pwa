@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import AIAssistant from '../components/AIAssistant';
 
 interface Booking {
   id: string;
@@ -22,16 +23,18 @@ export default function Dashboard() {
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [reviewingBooking, setReviewingBooking] = useState<Booking | null>(null);
   const [editedBooking, setEditedBooking] = useState<Booking | null>(null);
+  const [sessionToken, setSessionToken] = useState('');
 
   useEffect(() => {
-    const sessionToken = localStorage.getItem('session_token');
+    const token = localStorage.getItem('session_token');
     const email = localStorage.getItem('user_email');
 
-    if (!sessionToken) {
+    if (!token) {
       router.push('/');
       return;
     }
 
+    setSessionToken(token);
     setUserEmail(email || '');
 
     // Check for successful payment
@@ -283,6 +286,11 @@ export default function Dashboard() {
             </button>
           </div>
         )}
+
+        {/* AI Assistant */}
+        <div className="mb-8">
+          <AIAssistant sessionToken={sessionToken} />
+        </div>
 
         {/* Sync Button */}
         <div className="mb-6 flex justify-between items-center">
