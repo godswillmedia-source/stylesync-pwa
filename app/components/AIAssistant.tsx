@@ -22,7 +22,7 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
   const [audioLevel, setAudioLevel] = useState(0);
 
   const recognitionRef = useRef<any>(null);
-  const synthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -179,8 +179,12 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
       setConversationHistory((prev) => [...prev, newMessage]);
       setCurrentAnswer(data.answer);
 
-      // Speak the answer
-      speakAnswer(data.answer);
+      // Play OpenAI TTS audio if available, otherwise fallback to browser speech
+      if (data.audio) {
+        playAudio(data.audio);
+      } else {
+        speakAnswer(data.answer);
+      }
     } catch (error) {
       console.error('Error asking AI assistant:', error);
       const errorMsg = 'Sorry, I encountered an error. Please try again.';
@@ -189,30 +193,66 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
     }
   };
 
+  const playAudio = (audioBase64: string) => {
+    try {
+      // Convert base64 to audio blob
+      const audioData = atob(audioBase64);
+      const audioArray = new Uint8Array(audioData.length);
+      for (let i = 0; i < audioData.length; i++) {
+        audioArray[i] = audioData.charCodeAt(i);
+      }
+      const audioBlob = new Blob([audioArray], { type: 'audio/mpeg' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // Create and play audio element
+      audioElementRef.current = new Audio(audioUrl);
+
+      audioElementRef.current.onplay = () => {
+        setIsSpeaking(true);
+        simulateSpeakingAnimation();
+      };
+
+      audioElementRef.current.onended = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audioElementRef.current.onerror = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audioElementRef.current.play();
+    } catch (error) {
+      console.error('Audio playback error:', error);
+      setIsSpeaking(false);
+    }
+  };
+
   const speakAnswer = (text: string) => {
     if ('speechSynthesis' in window) {
       // Cancel any ongoing speech
       window.speechSynthesis.cancel();
 
-      synthesisRef.current = new SpeechSynthesisUtterance(text);
-      synthesisRef.current.rate = 1.0;
-      synthesisRef.current.pitch = 1.0;
-      synthesisRef.current.volume = 1.0;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
 
-      synthesisRef.current.onstart = () => {
+      utterance.onstart = () => {
         setIsSpeaking(true);
         simulateSpeakingAnimation();
       };
 
-      synthesisRef.current.onend = () => {
+      utterance.onend = () => {
         setIsSpeaking(false);
       };
 
-      synthesisRef.current.onerror = () => {
+      utterance.onerror = () => {
         setIsSpeaking(false);
       };
 
-      window.speechSynthesis.speak(synthesisRef.current);
+      window.speechSynthesis.speak(utterance);
     } else {
       setIsSpeaking(false);
     }
