@@ -13,60 +13,141 @@ interface AIAssistantProps {
 }
 
 export default function AIAssistant({ sessionToken }: AIAssistantProps) {
-  const [question, setQuestion] = useState('');
-  const [loading, setLoading] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [currentTranscript, setCurrentTranscript] = useState('');
   const [currentAnswer, setCurrentAnswer] = useState('');
+  const [audioLevel, setAudioLevel] = useState(0);
+
   const recognitionRef = useRef<any>(null);
+  const synthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
-  // Initialize Speech Recognition
+  // Initialize Speech Recognition and Text-to-Speech
   useEffect(() => {
-    if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'en-US';
+    if (typeof window !== 'undefined') {
+      // Speech Recognition Setup
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
+        recognitionRef.current.lang = 'en-US';
 
-      recognitionRef.current.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setQuestion(transcript);
-        setIsListening(false);
-      };
+        recognitionRef.current.onresult = (event: any) => {
+          let transcript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+          }
+          setCurrentTranscript(transcript);
+        };
 
-      recognitionRef.current.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-      };
+        recognitionRef.current.onerror = (event: any) => {
+          console.error('Speech recognition error:', event.error);
+          if (event.error === 'no-speech') {
+            // Automatically restart if no speech detected
+            if (isListening) {
+              recognitionRef.current.start();
+            }
+          }
+        };
 
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-      };
+        recognitionRef.current.onend = () => {
+          // Auto-restart if still in listening mode
+          if (isListening) {
+            recognitionRef.current.start();
+          }
+        };
+      }
+
+      // Audio Context for visualization
+      if ('AudioContext' in window || 'webkitAudioContext' in window) {
+        const AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
+        audioContextRef.current = new AudioContext();
+      }
     }
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
   }, []);
 
-  const toggleVoiceInput = () => {
+  // Microphone visualization
+  useEffect(() => {
+    if (isListening && !isSpeaking) {
+      startMicrophoneVisualization();
+    } else {
+      stopVisualization();
+    }
+  }, [isListening, isSpeaking]);
+
+  const startMicrophoneVisualization = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (audioContextRef.current) {
+        const source = audioContextRef.current.createMediaStreamSource(stream);
+        analyserRef.current = audioContextRef.current.createAnalyser();
+        analyserRef.current.fftSize = 256;
+        source.connect(analyserRef.current);
+
+        const updateLevel = () => {
+          if (analyserRef.current && isListening && !isSpeaking) {
+            const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+            analyserRef.current.getByteFrequencyData(dataArray);
+            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            setAudioLevel(average / 255);
+            animationFrameRef.current = requestAnimationFrame(updateLevel);
+          }
+        };
+        updateLevel();
+      }
+    } catch (error) {
+      console.error('Microphone access error:', error);
+    }
+  };
+
+  const stopVisualization = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    setAudioLevel(0);
+  };
+
+  const toggleVoiceMode = async () => {
     if (!recognitionRef.current) {
       alert('Voice input is not supported in your browser. Please use Chrome or Edge.');
       return;
     }
 
     if (isListening) {
+      // Stop listening
       recognitionRef.current.stop();
       setIsListening(false);
+
+      // Process the transcript if there's any
+      if (currentTranscript.trim()) {
+        await askQuestion(currentTranscript);
+        setCurrentTranscript('');
+      }
     } else {
-      recognitionRef.current.start();
+      // Start listening
       setIsListening(true);
+      setCurrentTranscript('');
+      recognitionRef.current.start();
     }
   };
 
   const askQuestion = async (questionText: string) => {
     if (!questionText.trim()) return;
 
-    setLoading(true);
-    setCurrentAnswer('');
+    setIsSpeaking(true);
 
     try {
       const response = await fetch(
@@ -97,18 +178,54 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
 
       setConversationHistory((prev) => [...prev, newMessage]);
       setCurrentAnswer(data.answer);
-      setQuestion('');
+
+      // Speak the answer
+      speakAnswer(data.answer);
     } catch (error) {
       console.error('Error asking AI assistant:', error);
-      setCurrentAnswer('Sorry, I encountered an error. Please try again.');
-    } finally {
-      setLoading(false);
+      const errorMsg = 'Sorry, I encountered an error. Please try again.';
+      setCurrentAnswer(errorMsg);
+      speakAnswer(errorMsg);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    askQuestion(question);
+  const speakAnswer = (text: string) => {
+    if ('speechSynthesis' in window) {
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+
+      synthesisRef.current = new SpeechSynthesisUtterance(text);
+      synthesisRef.current.rate = 1.0;
+      synthesisRef.current.pitch = 1.0;
+      synthesisRef.current.volume = 1.0;
+
+      synthesisRef.current.onstart = () => {
+        setIsSpeaking(true);
+        simulateSpeakingAnimation();
+      };
+
+      synthesisRef.current.onend = () => {
+        setIsSpeaking(false);
+      };
+
+      synthesisRef.current.onerror = () => {
+        setIsSpeaking(false);
+      };
+
+      window.speechSynthesis.speak(synthesisRef.current);
+    } else {
+      setIsSpeaking(false);
+    }
+  };
+
+  const simulateSpeakingAnimation = () => {
+    const animate = () => {
+      if (isSpeaking) {
+        setAudioLevel(Math.random() * 0.7 + 0.3);
+        animationFrameRef.current = requestAnimationFrame(animate);
+      }
+    };
+    animate();
   };
 
   const quickQuestions = [
@@ -119,10 +236,36 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
     "Who are my most frequent clients?",
   ];
 
+  // Generate wave bars based on audio level
+  const generateWaveBars = () => {
+    const bars = [];
+    const barCount = 5;
+    for (let i = 0; i < barCount; i++) {
+      const height = isListening || isSpeaking
+        ? Math.max(20, audioLevel * 100 + Math.random() * 30)
+        : 20;
+      bars.push(
+        <div
+          key={i}
+          className="wave-bar"
+          style={{
+            height: `${height}px`,
+            backgroundColor: isListening ? '#cdf545' : '#000000',
+            width: '6px',
+            borderRadius: '3px',
+            margin: '0 3px',
+            transition: 'height 0.1s ease',
+          }}
+        />
+      );
+    }
+    return bars;
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold">AI Assistant</h2>
+        <h2 className="text-2xl font-bold">AI Voice Assistant</h2>
         {conversationHistory.length > 0 && (
           <button
             onClick={() => setShowHistory(!showHistory)}
@@ -150,12 +293,62 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
         </div>
       )}
 
-      {/* Current Answer */}
-      {currentAnswer && (
-        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-          <p className="text-sm text-gray-800 whitespace-pre-wrap">{currentAnswer}</p>
+      {/* Voice Orb with Animated Waves */}
+      <div className="flex flex-col items-center justify-center mb-6">
+        {/* Voice Orb */}
+        <div className="relative mb-4">
+          <button
+            onClick={toggleVoiceMode}
+            className={`relative w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
+              isListening
+                ? 'bg-[#cdf545] shadow-lg shadow-[#cdf545]/50 scale-110'
+                : isSpeaking
+                ? 'bg-black shadow-lg shadow-black/50 scale-110'
+                : 'bg-gray-200 hover:bg-gray-300'
+            }`}
+            style={{
+              boxShadow: (isListening || isSpeaking)
+                ? `0 0 ${30 + audioLevel * 50}px ${isListening ? '#cdf545' : '#000000'}`
+                : 'none',
+            }}
+          >
+            <div className="flex items-center justify-center gap-1">
+              {generateWaveBars()}
+            </div>
+          </button>
         </div>
-      )}
+
+        {/* Status Text */}
+        {isListening && (
+          <p className="text-lg font-semibold text-gray-700 mb-2">
+            Listening...
+          </p>
+        )}
+        {isSpeaking && (
+          <p className="text-lg font-semibold text-gray-700 mb-2">
+            Speaking...
+          </p>
+        )}
+        {!isListening && !isSpeaking && (
+          <p className="text-sm text-gray-500 mb-2">
+            Tap to talk with AI assistant
+          </p>
+        )}
+
+        {/* Current Transcript */}
+        {currentTranscript && (
+          <div className="mt-2 p-3 bg-gray-50 rounded-lg max-w-md">
+            <p className="text-sm text-gray-700">{currentTranscript}</p>
+          </div>
+        )}
+
+        {/* Current Answer */}
+        {currentAnswer && (
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg max-w-md">
+            <p className="text-sm text-gray-800 whitespace-pre-wrap">{currentAnswer}</p>
+          </div>
+        )}
+      </div>
 
       {/* Quick Action Buttons */}
       <div className="mb-4">
@@ -165,7 +358,7 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
             <button
               key={idx}
               onClick={() => askQuestion(q)}
-              disabled={loading}
+              disabled={isListening || isSpeaking}
               className="px-3 py-1 text-sm bg-gray-100 hover:bg-[#cdf545] rounded-full transition-colors disabled:opacity-50"
             >
               {q}
@@ -173,46 +366,6 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
           ))}
         </div>
       </div>
-
-      {/* Input Form */}
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Ask me anything about your bookings..."
-            disabled={loading}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#cdf545] disabled:opacity-50"
-          />
-          <button
-            type="button"
-            onClick={toggleVoiceInput}
-            disabled={loading}
-            className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${
-              isListening
-                ? 'bg-red-500 text-white hover:bg-red-600'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-            title={isListening ? 'Stop listening' : 'Start voice input'}
-          >
-            {isListening ? '⏹️' : '🎤'}
-          </button>
-        </div>
-        <button
-          type="submit"
-          disabled={loading || !question.trim()}
-          className="w-full bg-[#cdf545] text-black px-6 py-3 rounded-lg font-semibold hover:bg-[#b8e030] transition-colors disabled:opacity-50"
-        >
-          {loading ? 'Thinking...' : 'Ask'}
-        </button>
-      </form>
-
-      {isListening && (
-        <p className="text-sm text-center text-gray-600 mt-2 animate-pulse">
-          🎤 Listening...
-        </p>
-      )}
     </div>
   );
 }
