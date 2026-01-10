@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import AIAssistant from '../components/AIAssistant';
+import AIAssistantVAPI from '../components/AIAssistantVAPI';
 
 interface Booking {
   id: string;
@@ -12,6 +12,7 @@ interface Booking {
   synced: boolean;
   sync_method?: string;
   review_required?: boolean;
+  review_reason?: string;
 }
 
 export default function Dashboard() {
@@ -289,7 +290,7 @@ export default function Dashboard() {
 
         {/* AI Assistant */}
         <div className="mb-8">
-          <AIAssistant sessionToken={sessionToken} />
+          <AIAssistantVAPI sessionToken={sessionToken} />
         </div>
 
         {/* Sync Button */}
@@ -394,6 +395,24 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
             <h2 className="text-2xl font-bold mb-4">Review Booking</h2>
+
+            {/* Conflict Warning */}
+            {reviewingBooking.review_reason && (
+              <div className="mb-4 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl">⚠️</span>
+                  <div>
+                    <h3 className="font-bold text-yellow-800 mb-1">Review Required</h3>
+                    <p className="text-sm text-yellow-700">{reviewingBooking.review_reason}</p>
+                    {reviewingBooking.review_reason.toLowerCase().includes('conflict') && (
+                      <p className="text-xs text-yellow-600 mt-2">
+                        If you approve this booking, it will create an overlapping calendar event. Make sure this is intentional!
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4 mb-6">
               <div>

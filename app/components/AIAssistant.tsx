@@ -58,7 +58,17 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
             finalTranscriptRef.current = finalTranscript;
             setCurrentTranscript(finalTranscript);
             // Reset silence timer when user speaks
-            resetSilenceTimer();
+            if (silenceTimerRef.current) {
+              clearTimeout(silenceTimerRef.current);
+            }
+            silenceTimerRef.current = setTimeout(() => {
+              if (finalTranscriptRef.current.trim()) {
+                const transcriptToProcess = finalTranscriptRef.current;
+                finalTranscriptRef.current = '';
+                setCurrentTranscript('');
+                askQuestion(transcriptToProcess);
+              }
+            }, 2000);
           } else {
             setCurrentTranscript(interimTranscript);
           }
@@ -69,9 +79,7 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
         };
 
         recognitionRef.current.onend = () => {
-          if (isActive && !isSpeaking) {
-            recognitionRef.current.start();
-          }
+          // Auto-restart is handled in askQuestion after AI finishes
         };
       }
 
@@ -136,20 +144,6 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
     setAudioLevel(0);
   };
 
-  const resetSilenceTimer = () => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-    }
-    // After 2 seconds of silence, process the transcript
-    silenceTimerRef.current = setTimeout(() => {
-      if (finalTranscriptRef.current.trim()) {
-        askQuestion(finalTranscriptRef.current);
-        finalTranscriptRef.current = '';
-        setCurrentTranscript('');
-      }
-    }, 2000);
-  };
-
   const activateAssistant = async () => {
     if (!recognitionRef.current) {
       alert('Voice input is not supported in your browser. Please use Chrome or Edge.');
@@ -187,13 +181,29 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
   const askQuestion = async (questionText: string) => {
     if (!questionText.trim() && questionText !== '__greeting__') return;
 
-    setIsListening(false);
-    setIsSpeaking(true);
+    // Clear any pending silence timer
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
 
     // Cancel greeting timer if it's still running
     if (greetingTimerRef.current) {
       clearTimeout(greetingTimerRef.current);
+      greetingTimerRef.current = null;
     }
+
+    // Stop listening while processing
+    setIsListening(false);
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        // Ignore if already stopped
+      }
+    }
+
+    setIsSpeaking(true);
 
     try {
       const response = await fetch(
@@ -229,26 +239,45 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
 
       setCurrentAnswer(data.answer);
 
-      // Play OpenAI TTS audio
-      if (data.audio) {
-        await playAudio(data.audio);
-      } else {
-        await speakAnswer(data.answer);
-      }
+      console.log('AI Response:', {
+        hasAnswer: !!data.answer,
+        hasAudio: !!data.audio,
+        answerLength: data.answer?.length || 0,
+      });
 
-      // After AI finishes speaking, resume listening
-      setIsSpeaking(false);
-      if (isActive) {
-        setIsListening(true);
+      // Try OpenAI TTS first, fallback to browser TTS
+      if (data.audio) {
+        console.log('Playing OpenAI TTS audio...');
+        try {
+          await playAudio(data.audio);
+          console.log('OpenAI TTS playback completed');
+        } catch (audioError) {
+          console.error('OpenAI TTS failed, falling back to browser TTS:', audioError);
+          await speakAnswer(data.answer);
+        }
+      } else {
+        // No OpenAI audio - use browser TTS
+        console.log('No OpenAI audio, using browser TTS...');
+        await speakAnswer(data.answer);
       }
     } catch (error) {
       console.error('Error asking AI assistant:', error);
       const errorMsg = 'Sorry, I encountered an error. Please try again.';
       setCurrentAnswer(errorMsg);
       await speakAnswer(errorMsg);
+    } finally {
+      // After AI finishes speaking, resume listening if still active
       setIsSpeaking(false);
-      if (isActive) {
-        setIsListening(true);
+      setCurrentAnswer('');
+      if (isActive && recognitionRef.current) {
+        try {
+          setIsListening(true);
+          finalTranscriptRef.current = '';
+          setCurrentTranscript('');
+          recognitionRef.current.start();
+        } catch (e) {
+          console.error('Error restarting recognition:', e);
+        }
       }
     }
   };
@@ -275,12 +304,18 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
           resolve();
         };
 
-        audioElementRef.current.onerror = () => {
+        audioElementRef.current.onerror = (e) => {
+          console.error('Audio element error:', e);
           URL.revokeObjectURL(audioUrl);
           resolve();
         };
 
-        audioElementRef.current.play();
+        // Play with error handling
+        audioElementRef.current.play().catch((playError) => {
+          console.error('Audio play error:', playError);
+          // Fallback to browser TTS if audio fails
+          resolve();
+        });
       } catch (error) {
         console.error('Audio playback error:', error);
         resolve();
@@ -294,7 +329,7 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
         window.speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.95; // Slightly slower for natural pace
+        utterance.rate = 0.9; // Professional, clear pace
         utterance.pitch = 1.0;
         utterance.volume = 1.0;
 
@@ -437,9 +472,10 @@ export default function AIAssistant({ sessionToken }: AIAssistantProps) {
           </div>
         )}
 
+        {/* Temporary debug display - shows response is received */}
         {currentAnswer && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg max-w-md">
-            <p className="text-sm text-gray-800 whitespace-pre-wrap">{currentAnswer}</p>
+          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg max-w-md">
+            <p className="text-xs text-blue-600">Speaking: {currentAnswer}</p>
           </div>
         )}
       </div>
