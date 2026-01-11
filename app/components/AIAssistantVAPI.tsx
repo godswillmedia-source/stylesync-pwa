@@ -276,6 +276,9 @@ Filter by date/time as requested.
 Be VERY brief (1-2 sentences max).`;
 
         // Start call with assistant and inject calendar data via assistantOverrides
+        console.log('🎯 Starting VAPI with assistantOverrides (calendar in system prompt)');
+        console.log('Calendar summary length:', calendarPrompt.length);
+
         await vapiRef.current.start(assistantId, {
           assistantOverrides: {
             model: {

@@ -1,3 +1,12 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+out/
+dist/
+build/
+
 # Environment variables
 .env
 .env.local
@@ -10,3 +19,8 @@
 # But keep examples
 !.env.example
 !.env.local.example
+
+# OS files
+.DS_Store
+.vercel/
+next-env.d.ts
