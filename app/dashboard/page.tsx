@@ -118,6 +118,9 @@ export default function Dashboard() {
 
     try {
       const sessionToken = localStorage.getItem('session_token');
+      const mcpServerUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'https://salon-mcp-server-9yzw.onrender.com';
+
+      // Step 1: Sync bookings from email
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_AGENT_URL}?action=sync`,
         {
@@ -136,10 +139,27 @@ export default function Dashboard() {
 
       const { synced_count, total_processed } = await response.json();
 
+      // Step 2: Force refresh calendar cache from Google Calendar
+      console.log('🔄 Refreshing calendar cache...');
+      const cacheResponse = await fetch(`${mcpServerUrl}/api/refresh-calendar-cache`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_email: userEmail,
+        }),
+      });
+
+      if (cacheResponse.ok) {
+        const cacheData = await cacheResponse.json();
+        console.log(`✅ Calendar cache refreshed: ${cacheData.event_count} events`);
+      }
+
       if (total_processed === 0) {
-        alert('No new booking emails found. Make sure you have emails from StyleSeat (info@style.styleseat.com) in your inbox.');
+        alert('No new booking emails found. Calendar cache refreshed!');
       } else {
-        alert(`Synced ${synced_count} of ${total_processed} bookings!`);
+        alert(`Synced ${synced_count} of ${total_processed} bookings and refreshed calendar!`);
       }
       await fetchBookings(); // Refresh list
     } catch (error) {

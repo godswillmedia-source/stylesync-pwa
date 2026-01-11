@@ -1,36 +1,12 @@
-# Dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# Testing
-/coverage
-
-# Next.js
-/.next/
-/out/
-
-# Production
-/build
-
-# Misc
-.DS_Store
-*.pem
-
-# Debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Local env files
-.env*.local
+# Environment variables
 .env
-
-# Vercel
-.vercel
-
-# TypeScript
-*.tsbuildinfo
-next-env.d.ts
-.env.check
+.env.local
 .env.production
+.env.production.local
+.env.check
+.env.check.local
+.env.check2.local
+
+# But keep examples
+!.env.example
+!.env.local.example

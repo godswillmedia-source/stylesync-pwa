@@ -28,6 +28,7 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
 
   const vapiRef = useRef<any>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const calendarRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Function to load fresh calendar events from Google Calendar
   const loadCalendarEvents = async () => {
@@ -50,7 +51,7 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
           Authorization: `Bearer ${sessionToken}`,
         },
         body: JSON.stringify({
-          user_id: userId,
+          user_email: userEmail, // Use email instead of user_id to avoid UUID issues
           start_time: sevenDaysAgo.toISOString(),
           end_time: thirtyDaysFromNow.toISOString(),
         }),
@@ -134,9 +135,23 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
           }
         }
 
-        // Handle function calls
+        // Handle function calls - refresh calendar after booking
         if (message.type === 'function-call') {
           console.log('VAPI: Function called:', message.functionCall);
+
+          // If Diana just booked an appointment, refresh the calendar
+          if (message.functionCall?.name === 'book_appointment') {
+            console.log('📅 Appointment booked! Refreshing calendar...');
+            setTimeout(() => loadCalendarEvents(), 2000); // Wait 2s for Google to sync
+          }
+        }
+
+        // Handle function results - also refresh on successful booking
+        if (message.type === 'function-call-result') {
+          if (message.functionCall?.name === 'book_appointment' && message.result?.success) {
+            console.log('✅ Booking confirmed! Refreshing calendar...');
+            setTimeout(() => loadCalendarEvents(), 2000);
+          }
         }
       });
 
@@ -158,8 +173,29 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+      if (calendarRefreshIntervalRef.current) {
+        clearInterval(calendarRefreshIntervalRef.current);
+      }
     };
   }, []);
+
+  // Auto-refresh calendar every 30 minutes
+  useEffect(() => {
+    // Initial load
+    loadCalendarEvents();
+
+    // Set up 30-minute refresh interval
+    calendarRefreshIntervalRef.current = setInterval(() => {
+      console.log('🔄 Auto-refreshing calendar (30min interval)...');
+      loadCalendarEvents();
+    }, 30 * 60 * 1000); // 30 minutes
+
+    return () => {
+      if (calendarRefreshIntervalRef.current) {
+        clearInterval(calendarRefreshIntervalRef.current);
+      }
+    };
+  }, [sessionToken, userId]);
 
   const stopVisualization = () => {
     if (animationFrameRef.current) {
@@ -208,15 +244,54 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
           attendees: event.attendees?.map((a: any) => a.email),
         }));
 
-        // Start call with assistant
+        console.log(`📤 Sending ${formattedEvents.length} events to Diana`);
+        console.log('First 5 events:', formattedEvents.slice(0, 5).map((e: any) => e.summary));
+
+        // Filter to next 14 days for faster prompt processing
+        const now = new Date();
+        const fourteenDaysFromNow = new Date(now);
+        fourteenDaysFromNow.setDate(now.getDate() + 14);
+
+        const upcomingEvents = formattedEvents.filter((e: any) => {
+          const eventDate = new Date(e.start);
+          return eventDate >= now && eventDate <= fourteenDaysFromNow;
+        });
+
+        // Build calendar summary for Diana's prompt
+        const calendarSummary = upcomingEvents
+          .map((e: any) => {
+            const date = new Date(e.start);
+            return `- ${e.summary} on ${date.toLocaleDateString()} at ${date.toLocaleTimeString()}`;
+          })
+          .join('\n');
+
+        const calendarPrompt = `
+**UPCOMING APPOINTMENTS (next 14 days - ${upcomingEvents.length} of ${formattedEvents.length} cached events):**
+
+${calendarSummary}
+
+**Instructions:**
+When user asks about appointments, reference the calendar above.
+Filter by date/time as requested.
+Be VERY brief (1-2 sentences max).`;
+
+        // Start call with assistant and inject calendar data via assistantOverrides
         await vapiRef.current.start(assistantId, {
-          // Pass session token and FRESH calendar events to Diana
-          metadata: {
-            sessionToken: sessionToken,
-            userId: userId,
-            userEmail: userEmail,
-            calendarEvents: JSON.stringify(formattedEvents),
-            totalEvents: formattedEvents.length,
+          assistantOverrides: {
+            model: {
+              messages: [
+                {
+                  role: 'system',
+                  content: `You are Diana, StyleSync AI voice assistant.${calendarPrompt}
+
+Response style:
+✅ "You have a haircut tomorrow at 7pm and wings Tuesday."
+❌ "Oh hey! Let me check... you've got..."
+
+Keep responses under 2 sentences.`,
+                },
+              ],
+            },
           },
         });
       } catch (error) {
