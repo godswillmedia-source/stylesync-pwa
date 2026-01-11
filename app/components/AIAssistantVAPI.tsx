@@ -24,55 +24,54 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
   const [currentTranscript, setCurrentTranscript] = useState('');
   const [audioLevel, setAudioLevel] = useState(0);
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
-  const [isLoadingCalendar, setIsLoadingCalendar] = useState(true);
+  const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
 
   const vapiRef = useRef<any>(null);
   const animationFrameRef = useRef<number | null>(null);
 
-  // Pre-load calendar events (past 7 days + next 30 days)
-  useEffect(() => {
-    const loadCalendarEvents = async () => {
-      try {
-        const now = new Date();
-        const sevenDaysAgo = new Date(now);
-        sevenDaysAgo.setDate(now.getDate() - 7);
+  // Function to load fresh calendar events from Google Calendar
+  const loadCalendarEvents = async () => {
+    try {
+      setIsLoadingCalendar(true);
+      const now = new Date();
+      const sevenDaysAgo = new Date(now);
+      sevenDaysAgo.setDate(now.getDate() - 7);
 
-        const thirtyDaysFromNow = new Date(now);
-        thirtyDaysFromNow.setDate(now.getDate() + 30);
+      const thirtyDaysFromNow = new Date(now);
+      thirtyDaysFromNow.setDate(now.getDate() + 30);
 
-        const mcpServerUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'https://salon-mcp-server.onrender.com';
+      const mcpServerUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'https://salon-mcp-server-9yzw.onrender.com';
 
-        console.log('📅 Pre-loading calendar events...');
-        const response = await fetch(`${mcpServerUrl}/api/get-calendar-events`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${sessionToken}`,
-          },
-          body: JSON.stringify({
-            user_id: userId,
-            start_time: sevenDaysAgo.toISOString(),
-            end_time: thirtyDaysFromNow.toISOString(),
-          }),
-        });
+      console.log('📅 Loading fresh calendar events from Google Calendar...');
+      const response = await fetch(`${mcpServerUrl}/api/get-calendar-events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          start_time: sevenDaysAgo.toISOString(),
+          end_time: thirtyDaysFromNow.toISOString(),
+        }),
+      });
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch calendar events');
-        }
-
-        const data = await response.json();
-        console.log('✅ Calendar events loaded:', data.events?.length || 0);
-        setCalendarEvents(data.events || []);
-      } catch (error) {
-        console.error('Error loading calendar events:', error);
-        setCalendarEvents([]);
-      } finally {
-        setIsLoadingCalendar(false);
+      if (!response.ok) {
+        throw new Error('Failed to fetch calendar events');
       }
-    };
 
-    loadCalendarEvents();
-  }, [sessionToken, userId]);
+      const data = await response.json();
+      console.log('✅ Calendar events loaded:', data.events?.length || 0);
+      setCalendarEvents(data.events || []);
+      return data.events || [];
+    } catch (error) {
+      console.error('Error loading calendar events:', error);
+      setCalendarEvents([]);
+      return [];
+    } finally {
+      setIsLoadingCalendar(false);
+    }
+  };
 
   // Initialize VAPI
   useEffect(() => {
@@ -184,7 +183,7 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
       setIsSpeaking(false);
       stopVisualization();
     } else {
-      // Start the call
+      // Start the call - ALWAYS load fresh calendar data first
       setIsConnecting(true);
       setCurrentTranscript('');
 
@@ -196,8 +195,12 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
           throw new Error('VAPI assistant ID not configured');
         }
 
+        // Load FRESH calendar events from Google Calendar
+        console.log('🔄 Refreshing calendar from Google...');
+        const freshEvents = await loadCalendarEvents();
+
         // Format calendar events for Diana's context
-        const formattedEvents = calendarEvents.map((event: any) => ({
+        const formattedEvents = freshEvents.map((event: any) => ({
           summary: event.summary,
           start: event.start?.dateTime || event.start?.date,
           end: event.end?.dateTime || event.end?.date,
@@ -207,7 +210,7 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
 
         // Start call with assistant
         await vapiRef.current.start(assistantId, {
-          // Pass session token and calendar events to Diana
+          // Pass session token and FRESH calendar events to Diana
           metadata: {
             sessionToken: sessionToken,
             userId: userId,
