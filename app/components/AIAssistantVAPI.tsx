@@ -256,43 +256,33 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
           console.log('First 5 events:', formattedEvents.slice(0, 5).map((e: any) => e.summary));
         }
 
-        // Filter to next 14 days for faster prompt processing
+        // Filter to next 7 days and limit to 15 events to avoid VAPI prompt size limits
         const now = new Date();
-        const fourteenDaysFromNow = new Date(now);
-        fourteenDaysFromNow.setDate(now.getDate() + 14);
+        const sevenDaysFromNow = new Date(now);
+        sevenDaysFromNow.setDate(now.getDate() + 7);
 
-        const upcomingEvents = formattedEvents.filter((e: any) => {
-          const eventDate = new Date(e.start);
-          return eventDate >= now && eventDate <= fourteenDaysFromNow;
-        });
+        const upcomingEvents = formattedEvents
+          .filter((e: any) => {
+            const eventDate = new Date(e.start);
+            return eventDate >= now && eventDate <= sevenDaysFromNow;
+          })
+          .slice(0, 15); // Limit to 15 events max to keep prompt concise
 
-        // Build calendar summary for Diana's prompt
+        // Build calendar summary for Diana's prompt (keep it concise)
         const calendarSummary = upcomingEvents.length > 0
           ? upcomingEvents
               .map((e: any) => {
                 const date = new Date(e.start);
-                return `- ${e.summary} on ${date.toLocaleDateString()} at ${date.toLocaleTimeString()}`;
+                const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+                const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                return `${dayName} ${time}: ${e.summary}`;
               })
               .join('\n')
-          : 'No upcoming events in the next 14 days.';
+          : 'No upcoming events in next 7 days.';
 
         const calendarPrompt = upcomingEvents.length > 0
-          ? `
-**UPCOMING APPOINTMENTS (next 14 days - ${upcomingEvents.length} of ${formattedEvents.length} cached events):**
-
-${calendarSummary}
-
-**Instructions:**
-When user asks about appointments, reference the calendar above.
-Filter by date/time as requested.
-Be VERY brief (1-2 sentences max).`
-          : `
-**CALENDAR STATUS:**
-No upcoming appointments found in the next 14 days.
-
-**Instructions:**
-If user asks about appointments, tell them you don't see any upcoming appointments.
-Be helpful and brief.`;
+          ? `\n\nUPCOMING EVENTS (next 7 days):\n${calendarSummary}\n\nWhen asked about appointments, reference the events above. Be brief.`
+          : `\n\nNo upcoming events in next 7 days. Tell user you don't see any appointments.`;
 
         // Start call with assistant and inject calendar data via assistantOverrides
         console.log('🎯 Starting VAPI with assistantOverrides (calendar in system prompt)');
@@ -304,13 +294,9 @@ Be helpful and brief.`;
               messages: [
                 {
                   role: 'system',
-                  content: `You are Diana, StyleSync AI voice assistant.${calendarPrompt}
+                  content: `You are Diana, StyleSync voice assistant.${calendarPrompt}
 
-Response style:
-✅ "You have a haircut tomorrow at 7pm and wings Tuesday."
-❌ "Oh hey! Let me check... you've got..."
-
-Keep responses under 2 sentences.`,
+Keep responses under 2 sentences. Be direct and brief.`,
                 },
               ],
             },
