@@ -11,9 +11,10 @@ interface Message {
 
 interface AIAssistantVAPIProps {
   sessionToken: string;
+  userId: string;
 }
 
-export default function AIAssistantVAPI({ sessionToken }: AIAssistantVAPIProps) {
+export default function AIAssistantVAPI({ sessionToken, userId }: AIAssistantVAPIProps) {
   const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [isActive, setIsActive] = useState(false);
@@ -21,9 +22,61 @@ export default function AIAssistantVAPI({ sessionToken }: AIAssistantVAPIProps) 
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentTranscript, setCurrentTranscript] = useState('');
   const [audioLevel, setAudioLevel] = useState(0);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [isLoadingCalendar, setIsLoadingCalendar] = useState(true);
 
   const vapiRef = useRef<any>(null);
   const animationFrameRef = useRef<number | null>(null);
+
+  // Pre-load calendar events (past 7 days + next 30 days)
+  useEffect(() => {
+    const loadCalendarEvents = async () => {
+      try {
+        const now = new Date();
+        const sevenDaysAgo = new Date(now);
+        sevenDaysAgo.setDate(now.getDate() - 7);
+
+        const thirtyDaysFromNow = new Date(now);
+        thirtyDaysFromNow.setDate(now.getDate() + 30);
+
+        const agentUrl = process.env.NEXT_PUBLIC_AGENT_URL;
+        if (!agentUrl) {
+          console.error('Agent URL not configured');
+          setIsLoadingCalendar(false);
+          return;
+        }
+
+        console.log('📅 Pre-loading calendar events...');
+        const response = await fetch(`${agentUrl}?action=get_calendar_events`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${sessionToken}`,
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            start_time: sevenDaysAgo.toISOString(),
+            end_time: thirtyDaysFromNow.toISOString(),
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch calendar events');
+        }
+
+        const data = await response.json();
+        console.log('✅ Calendar events loaded:', data.events?.length || 0);
+        setCalendarEvents(data.events || []);
+      } catch (error) {
+        console.error('Error loading calendar events:', error);
+        setCalendarEvents([]);
+      } finally {
+        setIsLoadingCalendar(false);
+      }
+    };
+
+    loadCalendarEvents();
+  }, [sessionToken, userId]);
 
   // Initialize VAPI
   useEffect(() => {
@@ -147,11 +200,23 @@ export default function AIAssistantVAPI({ sessionToken }: AIAssistantVAPIProps) 
           throw new Error('VAPI assistant ID not configured');
         }
 
+        // Format calendar events for Diana's context
+        const formattedEvents = calendarEvents.map((event: any) => ({
+          summary: event.summary,
+          start: event.start?.dateTime || event.start?.date,
+          end: event.end?.dateTime || event.end?.date,
+          description: event.description,
+          attendees: event.attendees?.map((a: any) => a.email),
+        }));
+
         // Start call with assistant
         await vapiRef.current.start(assistantId, {
-          // Pass session token to function calls
+          // Pass session token and calendar events to Diana
           metadata: {
             sessionToken: sessionToken,
+            userId: userId,
+            calendarEvents: JSON.stringify(formattedEvents),
+            totalEvents: formattedEvents.length,
           },
         });
       } catch (error) {

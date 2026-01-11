@@ -25,10 +25,12 @@ export default function Dashboard() {
   const [reviewingBooking, setReviewingBooking] = useState<Booking | null>(null);
   const [editedBooking, setEditedBooking] = useState<Booking | null>(null);
   const [sessionToken, setSessionToken] = useState('');
+  const [userId, setUserId] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('session_token');
     const email = localStorage.getItem('user_email');
+    const storedUserId = localStorage.getItem('user_id');
 
     if (!token) {
       router.push('/');
@@ -37,6 +39,7 @@ export default function Dashboard() {
 
     setSessionToken(token);
     setUserEmail(email || '');
+    setUserId(storedUserId || '');
 
     // Check for successful payment
     const urlParams = new URLSearchParams(window.location.search);
@@ -290,7 +293,7 @@ export default function Dashboard() {
 
         {/* AI Assistant */}
         <div className="mb-8">
-          <AIAssistantVAPI sessionToken={sessionToken} />
+          <AIAssistantVAPI sessionToken={sessionToken} userId={userId} />
         </div>
 
         {/* Sync Button */}
