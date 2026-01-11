@@ -231,75 +231,30 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
           throw new Error('VAPI assistant ID not configured');
         }
 
-        // Load FRESH calendar events from Google Calendar
-        console.log('🔄 Refreshing calendar from Google...');
-        let freshEvents = [];
+        // Pre-sync calendar to Supabase cache
+        console.log('🔄 Pre-syncing calendar to Supabase...');
+        const mcpServerUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'https://salon-mcp-server-9yzw.onrender.com';
+
         try {
-          freshEvents = await loadCalendarEvents();
-          console.log(`✅ Loaded ${freshEvents.length} calendar events`);
+          await fetch(`${mcpServerUrl}/api/refresh-calendar-cache`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_email: userEmail }),
+          });
+          console.log('✅ Calendar synced to Supabase cache');
         } catch (error) {
-          console.error('❌ Failed to load calendar events:', error);
-          console.log('⚠️ Starting Diana without calendar data...');
+          console.error('Failed to sync calendar:', error);
         }
 
-        // Format calendar events for Diana's context
-        const formattedEvents = freshEvents.map((event: any) => ({
-          summary: event.summary,
-          start: event.start?.dateTime || event.start?.date,
-          end: event.end?.dateTime || event.end?.date,
-          description: event.description,
-          attendees: event.attendees?.map((a: any) => a.email),
-        }));
-
-        console.log(`📤 Sending ${formattedEvents.length} events to Diana`);
-        if (formattedEvents.length > 0) {
-          console.log('First 5 events:', formattedEvents.slice(0, 5).map((e: any) => e.summary));
-        }
-
-        // Filter to next 7 days and limit to 15 events to avoid VAPI prompt size limits
-        const now = new Date();
-        const sevenDaysFromNow = new Date(now);
-        sevenDaysFromNow.setDate(now.getDate() + 7);
-
-        const upcomingEvents = formattedEvents
-          .filter((e: any) => {
-            const eventDate = new Date(e.start);
-            return eventDate >= now && eventDate <= sevenDaysFromNow;
-          })
-          .slice(0, 15); // Limit to 15 events max to keep prompt concise
-
-        // Build calendar summary for Diana's prompt (keep it concise)
-        const calendarSummary = upcomingEvents.length > 0
-          ? upcomingEvents
-              .map((e: any) => {
-                const date = new Date(e.start);
-                const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-                const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                return `${dayName} ${time}: ${e.summary}`;
-              })
-              .join('\n')
-          : 'No upcoming events in next 7 days.';
-
-        const calendarPrompt = upcomingEvents.length > 0
-          ? `\n\nUPCOMING EVENTS (next 7 days):\n${calendarSummary}\n\nWhen asked about appointments, reference the events above. Be brief.`
-          : `\n\nNo upcoming events in next 7 days. Tell user you don't see any appointments.`;
-
-        // Start call with assistant and inject calendar data via assistantOverrides
-        console.log('🎯 Starting VAPI with assistantOverrides (calendar in system prompt)');
-        console.log('Calendar summary length:', calendarPrompt.length);
+        // Start Diana - she will query Supabase cache via MCP server
+        console.log('🎯 Starting Diana');
+        console.log('User email:', userEmail);
 
         await vapiRef.current.start(assistantId, {
-          assistantOverrides: {
-            model: {
-              messages: [
-                {
-                  role: 'system',
-                  content: `You are Diana, StyleSync voice assistant.${calendarPrompt}
-
-Keep responses under 2 sentences. Be direct and brief.`,
-                },
-              ],
-            },
+          metadata: {
+            userEmail: userEmail,
+            userId: userId,
+            sessionToken: sessionToken,
           },
         });
       } catch (error) {
