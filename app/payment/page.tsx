@@ -12,15 +12,44 @@ export default function Payment() {
   const [userEmail, setUserEmail] = useState('');
 
   useEffect(() => {
-    const sessionToken = localStorage.getItem('session_token');
-    const email = localStorage.getItem('user_email');
+    const checkSubscription = async () => {
+      const sessionToken = localStorage.getItem('session_token');
+      const email = localStorage.getItem('user_email');
 
-    if (!sessionToken) {
-      router.push('/');
-      return;
-    }
+      if (!sessionToken) {
+        router.push('/');
+        return;
+      }
 
-    setUserEmail(email || '');
+      setUserEmail(email || '');
+
+      // Check if user already has active subscription
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_AGENT_URL}?action=get_user_subscription`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ user_email: email }),
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          // If user has active or trialing subscription, redirect to dashboard
+          if (data.subscription_status === 'active' || data.subscription_status === 'trialing') {
+            router.push('/dashboard');
+          }
+        }
+      } catch (error) {
+        console.error('Error checking subscription:', error);
+        // Continue to payment page if check fails
+      }
+    };
+
+    checkSubscription();
   }, [router]);
 
   const handlePayment = async () => {
