@@ -43,17 +43,19 @@ export async function POST(request: Request) {
         const subscriptionResponse = await stripe.subscriptions.retrieve(session.subscription as string);
         const subscription = subscriptionResponse as any; // Type assertion for API compatibility
 
-        // Forward to agent to update database
-        await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}/webhook/stripe`, {
+        // Forward to agent to update database with full Stripe data
+        await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}?action=webhook_stripe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             event_type: 'checkout.session.completed',
             customer_email: userEmail,
-            subscription_id: subscription.id,
-            customer_id: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
-            subscription_status: subscription.status,
+            stripe_subscription_id: subscription.id,
+            stripe_customer_id: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
+            subscription_status: subscription.status, // 'trialing' or 'active'
             current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+            trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+            cancel_at_period_end: subscription.cancel_at_period_end || false,
           }),
         });
 
@@ -70,17 +72,19 @@ export async function POST(request: Request) {
         const customer = customerResponse as any;
         const customerEmail = customer.email || null;
 
-        // Forward to agent
-        await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}/webhook/stripe`, {
+        // Forward to agent with full Stripe data
+        await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}?action=webhook_stripe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             event_type: event.type,
             customer_email: customerEmail,
-            subscription_id: subscription.id,
-            customer_id: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
+            stripe_subscription_id: subscription.id,
+            stripe_customer_id: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
             subscription_status: subscription.status,
             current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+            trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+            cancel_at_period_end: subscription.cancel_at_period_end || false,
           }),
         });
 
@@ -97,16 +101,18 @@ export async function POST(request: Request) {
         const customerEmail = customer.email || null;
 
         // Forward to agent
-        await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}/webhook/stripe`, {
+        await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}?action=webhook_stripe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             event_type: 'customer.subscription.deleted',
             customer_email: customerEmail,
-            subscription_id: subscription.id,
-            customer_id: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
+            stripe_subscription_id: subscription.id,
+            stripe_customer_id: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
             subscription_status: 'canceled',
             current_period_end: null,
+            trial_end: null,
+            cancel_at_period_end: false,
           }),
         });
 
@@ -123,18 +129,30 @@ export async function POST(request: Request) {
         const invoice = event.data.object as any; // Type assertion for API compatibility
         console.log('Payment failed:', invoice.id);
 
-        // Get customer email and notify via agent
+        // Get customer email and subscription
         const customerResponse = await stripe.customers.retrieve(invoice.customer as string);
         const customer = customerResponse as any;
         const customerEmail = customer.email || null;
 
-        await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}/webhook/stripe`, {
+        // Get subscription details if available
+        let subscriptionData = {};
+        if (invoice.subscription) {
+          const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
+          subscriptionData = {
+            stripe_subscription_id: subscription.id,
+            subscription_status: subscription.status, // Will be 'past_due' or 'unpaid'
+            current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+          };
+        }
+
+        await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}?action=webhook_stripe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             event_type: 'invoice.payment_failed',
             customer_email: customerEmail,
-            subscription_status: 'past_due',
+            stripe_customer_id: invoice.customer,
+            ...subscriptionData,
           }),
         });
 
