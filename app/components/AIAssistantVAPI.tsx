@@ -12,9 +12,10 @@ interface Message {
 interface AIAssistantVAPIProps {
   sessionToken: string;
   userId: string;
+  userEmail: string;
 }
 
-export default function AIAssistantVAPI({ sessionToken, userId }: AIAssistantVAPIProps) {
+export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIAssistantVAPIProps) {
   const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [isActive, setIsActive] = useState(false);
@@ -215,6 +216,7 @@ export default function AIAssistantVAPI({ sessionToken, userId }: AIAssistantVAP
           metadata: {
             sessionToken: sessionToken,
             userId: userId,
+            userEmail: userEmail,
             calendarEvents: JSON.stringify(formattedEvents),
             totalEvents: formattedEvents.length,
           },

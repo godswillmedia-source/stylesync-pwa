@@ -293,7 +293,7 @@ export default function Dashboard() {
 
         {/* AI Assistant */}
         <div className="mb-8">
-          <AIAssistantVAPI sessionToken={sessionToken} userId={userId} />
+          <AIAssistantVAPI sessionToken={sessionToken} userId={userId} userEmail={userEmail} />
         </div>
 
         {/* Sync Button */}
