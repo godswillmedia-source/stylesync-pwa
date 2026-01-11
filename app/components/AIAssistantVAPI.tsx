@@ -40,15 +40,10 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
         const thirtyDaysFromNow = new Date(now);
         thirtyDaysFromNow.setDate(now.getDate() + 30);
 
-        const agentUrl = process.env.NEXT_PUBLIC_AGENT_URL;
-        if (!agentUrl) {
-          console.error('Agent URL not configured');
-          setIsLoadingCalendar(false);
-          return;
-        }
+        const mcpServerUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'https://salon-mcp-server.onrender.com';
 
         console.log('📅 Pre-loading calendar events...');
-        const response = await fetch(`${agentUrl}?action=get_calendar_events`, {
+        const response = await fetch(`${mcpServerUrl}/api/get-calendar-events`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

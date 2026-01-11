@@ -25,8 +25,9 @@ export default function Payment() {
 
       // Check if user already has active subscription
       try {
+        const mcpServerUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'https://salon-mcp-server.onrender.com';
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_AGENT_URL}?action=get_user_subscription`,
+          `${mcpServerUrl}/api/get-user-subscription`,
           {
             method: 'POST',
             headers: {
