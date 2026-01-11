@@ -233,7 +233,14 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
 
         // Load FRESH calendar events from Google Calendar
         console.log('🔄 Refreshing calendar from Google...');
-        const freshEvents = await loadCalendarEvents();
+        let freshEvents = [];
+        try {
+          freshEvents = await loadCalendarEvents();
+          console.log(`✅ Loaded ${freshEvents.length} calendar events`);
+        } catch (error) {
+          console.error('❌ Failed to load calendar events:', error);
+          console.log('⚠️ Starting Diana without calendar data...');
+        }
 
         // Format calendar events for Diana's context
         const formattedEvents = freshEvents.map((event: any) => ({
@@ -245,7 +252,9 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
         }));
 
         console.log(`📤 Sending ${formattedEvents.length} events to Diana`);
-        console.log('First 5 events:', formattedEvents.slice(0, 5).map((e: any) => e.summary));
+        if (formattedEvents.length > 0) {
+          console.log('First 5 events:', formattedEvents.slice(0, 5).map((e: any) => e.summary));
+        }
 
         // Filter to next 14 days for faster prompt processing
         const now = new Date();
@@ -258,14 +267,17 @@ export default function AIAssistantVAPI({ sessionToken, userId, userEmail }: AIA
         });
 
         // Build calendar summary for Diana's prompt
-        const calendarSummary = upcomingEvents
-          .map((e: any) => {
-            const date = new Date(e.start);
-            return `- ${e.summary} on ${date.toLocaleDateString()} at ${date.toLocaleTimeString()}`;
-          })
-          .join('\n');
+        const calendarSummary = upcomingEvents.length > 0
+          ? upcomingEvents
+              .map((e: any) => {
+                const date = new Date(e.start);
+                return `- ${e.summary} on ${date.toLocaleDateString()} at ${date.toLocaleTimeString()}`;
+              })
+              .join('\n')
+          : 'No upcoming events in the next 14 days.';
 
-        const calendarPrompt = `
+        const calendarPrompt = upcomingEvents.length > 0
+          ? `
 **UPCOMING APPOINTMENTS (next 14 days - ${upcomingEvents.length} of ${formattedEvents.length} cached events):**
 
 ${calendarSummary}
@@ -273,7 +285,14 @@ ${calendarSummary}
 **Instructions:**
 When user asks about appointments, reference the calendar above.
 Filter by date/time as requested.
-Be VERY brief (1-2 sentences max).`;
+Be VERY brief (1-2 sentences max).`
+          : `
+**CALENDAR STATUS:**
+No upcoming appointments found in the next 14 days.
+
+**Instructions:**
+If user asks about appointments, tell them you don't see any upcoming appointments.
+Be helpful and brief.`;
 
         // Start call with assistant and inject calendar data via assistantOverrides
         console.log('🎯 Starting VAPI with assistantOverrides (calendar in system prompt)');
