@@ -137,7 +137,8 @@ export async function POST(request: Request) {
         // Get subscription details if available
         let subscriptionData = {};
         if (invoice.subscription) {
-          const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
+          const subscriptionResponse = await stripe.subscriptions.retrieve(invoice.subscription as string);
+          const subscription = subscriptionResponse as any; // Type assertion for API compatibility
           subscriptionData = {
             stripe_subscription_id: subscription.id,
             subscription_status: subscription.status, // Will be 'past_due' or 'unpaid'
