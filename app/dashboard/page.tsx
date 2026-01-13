@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AIAssistantVAPI from '../components/AIAssistantVAPI';
+import SMSForwardingSetup from '../components/SMSForwardingSetup';
 
 interface Booking {
   id: string;
@@ -314,6 +315,11 @@ export default function Dashboard() {
         {/* AI Assistant */}
         <div className="mb-8">
           <AIAssistantVAPI sessionToken={sessionToken} userId={userId} userEmail={userEmail} />
+        </div>
+
+        {/* SMS Forwarding Setup */}
+        <div className="mb-8">
+          <SMSForwardingSetup userEmail={userEmail} />
         </div>
 
         {/* Sync Button */}

@@ -138,12 +138,21 @@ export async function POST(req: NextRequest) {
 
     if (!booking) {
       console.error('❌ Could not parse booking from SMS:', message);
+      // Debug: test the patterns directly
+      const testCustomer = message.match(/booked!\s+([A-Za-z][A-Za-z\-]+(?:\s+[A-Za-z][A-Za-z\-]+)+?)\s+scheduled/i);
+      const testTime = message.match(/at\s+(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))/i);
       return NextResponse.json(
         {
           error: 'Could not parse booking details from SMS',
           message: 'SMS format not recognized as a booking confirmation',
           received_message: message.substring(0, 200), // Show what we actually got
-          debug: 'Check if message matches StyleSeat format'
+          debug: {
+            message_length: message.length,
+            customer_match: testCustomer ? testCustomer[1] : null,
+            time_match: testTime ? testTime[1] : null,
+            has_booked: message.includes('booked!'),
+            has_scheduled: message.includes('scheduled'),
+          }
         },
         { status: 400 }
       );
