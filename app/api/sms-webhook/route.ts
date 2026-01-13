@@ -45,6 +45,9 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('📱 Raw payload received:', JSON.stringify(payload));
+    console.log('📱 Payload type:', typeof payload);
+    console.log('📱 Payload.message type:', typeof payload?.message);
+    console.log('📱 Payload.message value:', payload?.message?.substring?.(0, 50));
 
     // Find the message - check common field names
     let message: string = '';
@@ -70,6 +73,10 @@ export async function POST(req: NextRequest) {
         }
       }
     }
+
+    // Clean up common escape sequences that may come from various sources
+    // Remove backslash escapes: \! -> !, \' -> ', etc.
+    message = message.replace(/\\([!'"?])/g, '$1');
 
     if (!message) {
       console.error('❌ Could not find message in payload:', payload);
