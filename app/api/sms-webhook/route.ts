@@ -45,9 +45,6 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('📱 Raw payload received:', JSON.stringify(payload));
-    console.log('📱 Payload type:', typeof payload);
-    console.log('📱 Payload.message type:', typeof payload?.message);
-    console.log('📱 Payload.message value:', payload?.message?.substring?.(0, 50));
 
     // Find the message - check common field names
     let message: string = '';
@@ -145,32 +142,12 @@ export async function POST(req: NextRequest) {
 
     if (!booking) {
       console.error('❌ Could not parse booking from SMS:', message);
-      // Debug: test the patterns directly
-      const testCustomer = message.match(/booked!\s+([A-Za-z][A-Za-z\-]+(?:\s+[A-Za-z][A-Za-z\-]+)+?)\s+scheduled/i);
-      const testTime = message.match(/at\s+(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))/i);
-      // Check character codes around "booked" to debug encoding
-      const bookedIdx = message.indexOf('booked');
-      let charCodes = '';
-      if (bookedIdx >= 0) {
-        for (let i = bookedIdx; i < Math.min(bookedIdx + 10, message.length); i++) {
-          charCodes += message.charCodeAt(i) + ',';
-        }
-      }
       return NextResponse.json(
         {
           error: 'Could not parse booking details from SMS',
           message: 'SMS format not recognized as a booking confirmation',
-          received_message: message.substring(0, 200), // Show what we actually got
-          debug: {
-            message_length: message.length,
-            customer_match: testCustomer ? testCustomer[1] : null,
-            time_match: testTime ? testTime[1] : null,
-            has_booked: message.includes('booked'),
-            has_booked_exclaim: message.includes('booked!'),
-            has_scheduled: message.includes('scheduled'),
-            booked_index: bookedIdx,
-            char_codes_after_booked: charCodes,
-          }
+          received_message: message.substring(0, 200),
+          hint: 'Expected format: "StyleSeat: You just got booked! [Name] scheduled a [Service] with you on [Date] at [Time]."'
         },
         { status: 400 }
       );
