@@ -141,6 +141,14 @@ export async function POST(req: NextRequest) {
       // Debug: test the patterns directly
       const testCustomer = message.match(/booked!\s+([A-Za-z][A-Za-z\-]+(?:\s+[A-Za-z][A-Za-z\-]+)+?)\s+scheduled/i);
       const testTime = message.match(/at\s+(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))/i);
+      // Check character codes around "booked" to debug encoding
+      const bookedIdx = message.indexOf('booked');
+      let charCodes = '';
+      if (bookedIdx >= 0) {
+        for (let i = bookedIdx; i < Math.min(bookedIdx + 10, message.length); i++) {
+          charCodes += message.charCodeAt(i) + ',';
+        }
+      }
       return NextResponse.json(
         {
           error: 'Could not parse booking details from SMS',
@@ -150,8 +158,11 @@ export async function POST(req: NextRequest) {
             message_length: message.length,
             customer_match: testCustomer ? testCustomer[1] : null,
             time_match: testTime ? testTime[1] : null,
-            has_booked: message.includes('booked!'),
+            has_booked: message.includes('booked'),
+            has_booked_exclaim: message.includes('booked!'),
             has_scheduled: message.includes('scheduled'),
+            booked_index: bookedIdx,
+            char_codes_after_booked: charCodes,
           }
         },
         { status: 400 }
