@@ -115,17 +115,18 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (userError || !userData) {
-        // User not in database yet - that's OK, create a minimal user object
-        console.log('ℹ️ User not in database, proceeding anyway:', userEmail);
-        user = {
-          user_id: userEmail,
-          user_email: userEmail,
-          sms_sender_number: null,
-          access_token: null
-        };
-      } else {
-        user = userData;
+        // User not registered - they need to sign up first
+        console.log('❌ User not found in database:', userEmail);
+        return NextResponse.json(
+          {
+            error: 'User not registered',
+            details: 'Please sign up at stylesync-pwa.vercel.app before using SMS sync',
+            email: userEmail
+          },
+          { status: 404 }
+        );
       }
+      user = userData;
 
       // Optional: Verify sender matches saved StyleSeat number
       if (user.sms_sender_number && sender !== user.sms_sender_number) {
@@ -173,7 +174,7 @@ export async function POST(req: NextRequest) {
       const { data, error: bookingError } = await supabase!
         .from('salon_bookings')
         .insert({
-          user_id: userEmail, // Store email as user identifier
+          user_id: user.user_id, // Use actual UUID from user_tokens lookup
           customer_name: booking.customer_name,
           service: booking.service,
           appointment_time: booking.appointment_time,
