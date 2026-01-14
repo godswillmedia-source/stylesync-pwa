@@ -190,7 +190,13 @@ export async function POST(req: NextRequest) {
       if (bookingError) {
         console.error('❌ Error saving booking:', bookingError);
         return NextResponse.json(
-          { error: 'Failed to save booking' },
+          {
+            error: 'Failed to save booking',
+            details: bookingError.message,
+            code: bookingError.code,
+            hint: bookingError.hint,
+            parsed_booking: booking
+          },
           { status: 500 }
         );
       }

@@ -322,26 +322,43 @@ export default function Dashboard() {
           <SMSForwardingSetup userEmail={userEmail} />
         </div>
 
-        {/* Sync Button */}
+        {/* Sync Buttons */}
         <div className="mb-6 flex justify-between items-center">
           <h2 className="text-2xl font-bold">Your Bookings</h2>
-          <button
-            onClick={handleManualSync}
-            disabled={isSyncing}
-            className="btn-primary flex items-center gap-2"
-          >
-            {isSyncing ? (
-              <>
-                <div className="spinner w-5 h-5 border-2"></div>
-                Syncing...
-              </>
-            ) : (
-              <>
-                <span>🔄</span>
-                Sync Now
-              </>
-            )}
-          </button>
+          <div className="flex gap-3">
+            {/* SMS Sync Button */}
+            <button
+              onClick={() => {
+                // Opens iOS Shortcuts app to run the sync shortcut
+                window.location.href = 'shortcuts://run-shortcut?name=Sync StyleSeat Bookings';
+              }}
+              className="btn-secondary flex items-center gap-2"
+              title="Sync bookings from SMS messages"
+            >
+              <span>📱</span>
+              Sync SMS
+            </button>
+
+            {/* Email Sync Button */}
+            <button
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className="btn-primary flex items-center gap-2"
+              title="Sync bookings from email"
+            >
+              {isSyncing ? (
+                <>
+                  <div className="spinner w-5 h-5 border-2"></div>
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <span>🔄</span>
+                  Sync Email
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Bookings List */}
