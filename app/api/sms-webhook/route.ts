@@ -145,8 +145,8 @@ export async function POST(req: NextRequest) {
       console.error('❌ Could not parse booking from SMS:', message);
       return NextResponse.json(
         {
-          error: 'Could not parse booking details from SMS',
-          message: 'SMS format not recognized as a booking confirmation',
+          error: 'LETS HAVE A PARTY BECAUSE THE WEBHOOK DOES WORK! 🎉',
+          message: 'We received your message but could not parse booking details',
           received_message: message.substring(0, 200),
           hint: 'Expected format: "StyleSeat: You just got booked! [Name] scheduled a [Service] with you on [Date] at [Time]."'
         },
