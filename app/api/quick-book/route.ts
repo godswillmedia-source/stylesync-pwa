@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { CalendarService } from '@/app/lib/calendar';
+import { getEncryptionService } from '@/app/lib/encryption';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
     let calendarSynced = false;
     let googleEventId: string | null = null;
 
+    // Check for valid (non-placeholder) tokens
     const hasValidTokens = user.access_token &&
                            user.access_token !== 'pending_ios_oauth' &&
                            user.refresh_token &&
@@ -74,17 +76,29 @@ export async function POST(request: NextRequest) {
 
     if (hasValidTokens) {
       try {
+        // Decrypt tokens before using
+        const encryptionService = getEncryptionService();
+        const decryptedAccessToken = encryptionService.decrypt(user.access_token);
+        const decryptedRefreshToken = user.refresh_token
+          ? encryptionService.decrypt(user.refresh_token)
+          : undefined;
+
         const calendarService = new CalendarService({
-          accessToken: user.access_token,
-          refreshToken: user.refresh_token,
+          accessToken: decryptedAccessToken,
+          refreshToken: decryptedRefreshToken,
           authMethod: user.auth_method || 'web',
           onTokenRefresh: async (tokens) => {
-            // Update tokens in database when refreshed
+            // Encrypt and update tokens in database when refreshed
+            const newEncryptedAccess = encryptionService.encrypt(tokens.accessToken);
+            const newEncryptedRefresh = tokens.refreshToken
+              ? encryptionService.encrypt(tokens.refreshToken)
+              : user.refresh_token;
+
             await supabase
               .from('user_tokens')
               .update({
-                access_token: tokens.accessToken,
-                refresh_token: tokens.refreshToken || user.refresh_token,
+                access_token: newEncryptedAccess,
+                refresh_token: newEncryptedRefresh,
                 updated_at: new Date().toISOString(),
               })
               .eq('user_id', user.user_id);
