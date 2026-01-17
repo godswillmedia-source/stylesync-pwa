@@ -50,8 +50,6 @@ export async function POST(request: NextRequest) {
         duration_minutes: 60,
         notes: notes || null,
         status: 'confirmed',
-        created_via: 'quick_book',
-        created_at: new Date().toISOString(),
       })
       .select()
       .single();
