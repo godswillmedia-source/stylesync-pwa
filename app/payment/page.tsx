@@ -13,18 +13,23 @@ export default function Payment() {
 
   useEffect(() => {
     const checkSubscription = async () => {
-      const sessionToken = localStorage.getItem('session_token');
-      const email = localStorage.getItem('user_email');
-
-      if (!sessionToken) {
-        router.push('/');
-        return;
-      }
-
-      setUserEmail(email || '');
-
-      // Check if user already has active subscription
       try {
+        // Check session via cookie
+        const sessionResponse = await fetch('/api/auth/session');
+        if (!sessionResponse.ok) {
+          router.push('/');
+          return;
+        }
+
+        const { authenticated, user_email } = await sessionResponse.json();
+        if (!authenticated) {
+          router.push('/');
+          return;
+        }
+
+        setUserEmail(user_email || '');
+
+        // Check if user already has active subscription
         const mcpServerUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'https://salon-mcp-server.onrender.com';
         const response = await fetch(
           `${mcpServerUrl}/api/get-user-subscription`,
@@ -33,7 +38,7 @@ export default function Payment() {
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ user_email: email }),
+            body: JSON.stringify({ user_email }),
           }
         );
 
@@ -62,12 +67,11 @@ export default function Payment() {
         throw new Error('Stripe failed to load');
       }
 
-      // Create checkout session via your backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_AGENT_URL}?action=create_checkout`, {
+      // Create checkout session via proxy (token in httpOnly cookie)
+      const response = await fetch('/api/proxy?action=create_checkout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('session_token')}`,
         },
         body: JSON.stringify({
           success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?success=true`,

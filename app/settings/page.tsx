@@ -13,31 +13,35 @@ export default function Settings() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    const sessionToken = localStorage.getItem('session_token');
-    const email = localStorage.getItem('user_email');
+    const checkSession = async () => {
+      try {
+        const response = await fetch('/api/auth/session');
+        if (!response.ok) {
+          router.push('/');
+          return;
+        }
 
-    if (!sessionToken) {
-      router.push('/');
-      return;
-    }
+        const { authenticated, user_email } = await response.json();
+        if (!authenticated) {
+          router.push('/');
+          return;
+        }
 
-    setUserEmail(email || '');
+        setUserEmail(user_email || '');
 
-    // Fetch subscription status from agent
-    fetchSubscriptionStatus();
+        // Fetch subscription status from agent
+        fetchSubscriptionStatus();
+      } catch {
+        router.push('/');
+      }
+    };
+
+    checkSession();
   }, [router]);
 
   const fetchSubscriptionStatus = async () => {
     try {
-      const sessionToken = localStorage.getItem('session_token');
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_AGENT_URL}/subscription`,
-        {
-          headers: {
-            Authorization: `Bearer ${sessionToken}`,
-          },
-        }
-      );
+      const response = await fetch('/api/proxy?action=subscription');
 
       if (response.ok) {
         const data = await response.json();
@@ -80,9 +84,9 @@ export default function Settings() {
     }
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
     if (confirm('Are you sure you want to disconnect your account?')) {
-      localStorage.clear();
+      await fetch('/api/auth/logout', { method: 'POST' });
       router.push('/');
     }
   };

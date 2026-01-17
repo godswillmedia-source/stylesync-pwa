@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AIAssistantVAPI from '../components/AIAssistantVAPI';
 import SMSForwardingSetup from '../components/SMSForwardingSetup';
+import StyleSeatMap from '../components/StyleSeatMap';
+import ClientList from '../components/ClientList';
+import ThemeToggle from '../components/ThemeToggle';
 
 interface Booking {
   id: string;
@@ -29,44 +32,47 @@ export default function Dashboard() {
   const [userId, setUserId] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem('session_token');
-    const email = localStorage.getItem('user_email');
-    const storedUserId = localStorage.getItem('user_id');
+    const checkSession = async () => {
+      try {
+        const response = await fetch('/api/auth/session');
+        if (!response.ok) {
+          router.push('/');
+          return;
+        }
 
-    if (!token) {
-      router.push('/');
-      return;
-    }
+        const { authenticated, user_email, user_id } = await response.json();
+        if (!authenticated) {
+          router.push('/');
+          return;
+        }
 
-    setSessionToken(token);
-    setUserEmail(email || '');
-    setUserId(storedUserId || '');
+        setSessionToken('cookie'); // Token is now in httpOnly cookie
+        setUserEmail(user_email || '');
+        setUserId(user_id || '');
 
-    // Check for successful payment
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('success') === 'true') {
-      setShowSuccessMessage(true);
-      // Clean up URL
-      window.history.replaceState({}, document.title, '/dashboard');
-      // Hide message after 5 seconds
-      setTimeout(() => setShowSuccessMessage(false), 5000);
-    }
+        // Check for successful payment
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('success') === 'true') {
+          setShowSuccessMessage(true);
+          // Clean up URL
+          window.history.replaceState({}, document.title, '/dashboard');
+          // Hide message after 5 seconds
+          setTimeout(() => setShowSuccessMessage(false), 5000);
+        }
 
-    // Verify payment status before loading dashboard
-    verifyPaymentStatus();
+        // Verify payment status before loading dashboard
+        verifyPaymentStatus();
+      } catch {
+        router.push('/');
+      }
+    };
+
+    checkSession();
   }, [router]);
 
   const verifyPaymentStatus = async () => {
     try {
-      const sessionToken = localStorage.getItem('session_token');
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_AGENT_URL}?action=check_subscription`,
-        {
-          headers: {
-            Authorization: `Bearer ${sessionToken}`,
-          },
-        }
-      );
+      const response = await fetch('/api/proxy?action=check_subscription');
 
       if (!response.ok) {
         throw new Error('Failed to check subscription');
@@ -91,15 +97,7 @@ export default function Dashboard() {
 
   const fetchBookings = async () => {
     try {
-      const sessionToken = localStorage.getItem('session_token');
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_AGENT_URL}?action=bookings`,
-        {
-          headers: {
-            Authorization: `Bearer ${sessionToken}`,
-          },
-        }
-      );
+      const response = await fetch('/api/proxy?action=bookings');
 
       if (!response.ok) {
         throw new Error('Failed to fetch bookings');
@@ -118,19 +116,12 @@ export default function Dashboard() {
     setIsSyncing(true);
 
     try {
-      const sessionToken = localStorage.getItem('session_token');
       const mcpServerUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'https://salon-mcp-server-9yzw.onrender.com';
 
       // Step 1: Sync bookings from email
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_AGENT_URL}?action=sync`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${sessionToken}`,
-          },
-        }
-      );
+      const response = await fetch('/api/proxy?action=sync', {
+        method: 'POST',
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -171,8 +162,8 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.clear();
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/');
   };
 
@@ -196,23 +187,18 @@ export default function Dashboard() {
     if (!editedBooking) return;
 
     try {
-      const sessionToken = localStorage.getItem('session_token');
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_AGENT_URL}?action=approve_booking`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${sessionToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            booking_id: editedBooking.id,
-            customer_name: editedBooking.customer_name,
-            service: editedBooking.service,
-            appointment_time: editedBooking.appointment_time,
-          }),
-        }
-      );
+      const response = await fetch('/api/proxy?action=approve_booking', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          booking_id: editedBooking.id,
+          customer_name: editedBooking.customer_name,
+          service: editedBooking.service,
+          appointment_time: editedBooking.appointment_time,
+        }),
+      });
 
       if (!response.ok) {
         throw new Error('Failed to approve booking');
@@ -235,20 +221,15 @@ export default function Dashboard() {
     }
 
     try {
-      const sessionToken = localStorage.getItem('session_token');
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_AGENT_URL}?action=reject_booking`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${sessionToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            booking_id: reviewingBooking.id,
-          }),
-        }
-      );
+      const response = await fetch('/api/proxy?action=reject_booking', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          booking_id: reviewingBooking.id,
+        }),
+      });
 
       if (!response.ok) {
         throw new Error('Failed to reject booking');
@@ -264,15 +245,16 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-white shadow-sm">
+      <header className="header-bg shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-primary">StyleSync</h1>
-            <p className="text-sm text-gray-600">{userEmail}</p>
+            <p className="text-sm text-muted-color">{userEmail}</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
             <button
               onClick={() => router.push('/settings')}
               className="btn-secondary text-sm py-2"
@@ -281,7 +263,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={handleLogout}
-              className="text-sm text-gray-600 hover:text-gray-800"
+              className="text-sm text-muted-color hover:text-primary-color"
             >
               Logout
             </button>
@@ -320,6 +302,12 @@ export default function Dashboard() {
         {/* SMS Forwarding Setup */}
         <div className="mb-8">
           <SMSForwardingSetup userEmail={userEmail} />
+        </div>
+
+        {/* StyleSeat Activity & Clients */}
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
+          <StyleSeatMap userEmail={userEmail} />
+          <ClientList userEmail={userEmail} />
         </div>
 
         {/* Sync Buttons */}
@@ -368,10 +356,10 @@ export default function Dashboard() {
           </div>
         ) : bookings.length === 0 ? (
           <div className="card text-center py-12">
-            <p className="text-gray-600 mb-4">
+            <p className="text-secondary-color mb-4">
               No bookings yet. Click "Sync Now" to fetch your bookings!
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-color">
               Make sure you have booking emails in your Gmail inbox.
             </p>
           </div>
@@ -388,21 +376,21 @@ export default function Dashboard() {
                       {booking.customer_name}
                     </h3>
                     {booking.synced ? (
-                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                        ✓ Synced
+                      <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 text-xs rounded-full">
+                        Synced
                       </span>
                     ) : booking.review_required ? (
-                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                        ⚠ Review Needed
+                      <span className="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 text-xs rounded-full">
+                        Review Needed
                       </span>
                     ) : (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">
+                      <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 text-xs rounded-full">
                         Pending
                       </span>
                     )}
                   </div>
-                  <p className="text-gray-600 mb-1">{booking.service}</p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-secondary-color mb-1">{booking.service}</p>
+                  <p className="text-sm text-muted-color">
                     {formatDate(booking.appointment_time)}
                   </p>
                 </div>
@@ -425,13 +413,13 @@ export default function Dashboard() {
         )}
 
         {/* Info Box */}
-        <div className="mt-8 card bg-purple-50 border border-purple-200">
-          <h3 className="font-semibold mb-2">💡 How it works</h3>
-          <ul className="text-sm text-gray-700 space-y-1">
-            <li>• StyleSync monitors your email automatically</li>
-            <li>• New bookings are parsed and synced to your calendar</li>
-            <li>• High-confidence bookings are auto-synced instantly</li>
-            <li>• Unclear bookings are flagged for your review</li>
+        <div className="mt-8 card bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+          <h3 className="font-semibold mb-2">How it works</h3>
+          <ul className="text-sm text-secondary-color space-y-1">
+            <li>StyleSync monitors your email automatically</li>
+            <li>New bookings are parsed and synced to your calendar</li>
+            <li>High-confidence bookings are auto-synced instantly</li>
+            <li>Unclear bookings are flagged for your review</li>
           </ul>
         </div>
       </main>

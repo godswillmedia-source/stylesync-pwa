@@ -6,6 +6,26 @@
   --primary: #cdf545;
   --secondary: #b8e030;
   --accent: #cdf545;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --bg-card: #ffffff;
+  --text-primary: #000000;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+  --border-color: #e5e7eb;
+}
+
+.dark {
+  --primary: #cdf545;
+  --secondary: #b8e030;
+  --accent: #cdf545;
+  --bg-primary: #0f0f0f;
+  --bg-secondary: #1a1a1a;
+  --bg-card: #1f1f1f;
+  --text-primary: #ffffff;
+  --text-secondary: #d1d5db;
+  --text-muted: #9ca3af;
+  --border-color: #374151;
 }
 
 body {
@@ -14,24 +34,9 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #000000;
-  background-color: #ffffff;
-}
-
-/* Force black text globally */
-h1, h2, h3, h4, h5, h6, p, span, div, label, li {
-  color: #000000;
-}
-
-/* Black text on lime green buttons */
-.btn-primary,
-.btn-primary * {
-  color: #000000 !important;
-}
-
-button.bg-red-500,
-button.bg-red-500 * {
-  color: #ffffff !important;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Loading spinner */
@@ -52,15 +57,75 @@ button.bg-red-500 * {
 
 /* Button styles */
 .btn-primary {
-  @apply bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition-opacity;
+  @apply px-6 py-3 rounded-lg font-semibold transition-opacity;
+  background-color: var(--primary);
+  color: #000000 !important;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
 }
 
 .btn-secondary {
-  @apply bg-gray-200 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors;
-  color: #000000 !important;
+  @apply px-6 py-3 rounded-lg font-semibold transition-colors;
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-secondary);
 }
 
 /* Card styles */
 .card {
-  @apply bg-white rounded-lg shadow-md p-6;
+  @apply rounded-lg shadow-md p-6;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+}
+
+/* Input styles for dark mode */
+input, select, textarea {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--primary);
+  outline: none;
+  ring: 2px;
+  ring-color: var(--primary);
+}
+
+/* Header styles */
+.header-bg {
+  background-color: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Text colors */
+.text-primary-color {
+  color: var(--text-primary);
+}
+
+.text-secondary-color {
+  color: var(--text-secondary);
+}
+
+.text-muted-color {
+  color: var(--text-muted);
+}
+
+/* Background colors */
+.bg-primary-color {
+  background-color: var(--bg-primary);
+}
+
+.bg-secondary-color {
+  background-color: var(--bg-secondary);
+}
+
+.bg-card-color {
+  background-color: var(--bg-card);
 }

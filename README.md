@@ -28,6 +28,28 @@ PWA (This App) → StyleSync Agent → Salon MCP Server
 
 This PWA is **UI only** - no business logic. It calls the StyleSync Agent API for all operations.
 
+### SMS Smart Parsing Architecture (v0.3.0+)
+
+The SMS webhook now uses a **zero data loss** architecture with AI-powered message classification:
+
+```
+iOS Shortcut → POST /api/sms-webhook → raw_messages table → 200 OK (immediate)
+                                              ↓
+                            /api/process-messages (async, GPT-4)
+                                              ↓
+                          Classify: new_booking | cancellation | reschedule | reminder | other
+                                              ↓
+                            salon_bookings table (with client_id, status)
+                                              ↓
+                                    Diana Voice Assistant
+```
+
+**Key Benefits:**
+- **Zero Data Loss**: Every SMS is stored before processing (no more 400 errors on parse failures)
+- **Multi-Message Types**: Handles bookings, cancellations, reschedules, reminders
+- **Client Normalization**: Fuzzy matching via `clients` table with aliases
+- **Diana Integration**: Voice assistant has access to richer booking data (status, history)
+
 ## Pages
 
 ### 1. Landing Page (`/`)
@@ -173,25 +195,58 @@ pwa/
 │   │   └── page.tsx          # Dashboard
 │   ├── settings/
 │   │   └── page.tsx          # Settings
+│   ├── api/
+│   │   ├── sms-webhook/
+│   │   │   └── route.ts      # Smart SMS ingestion (zero data loss)
+│   │   ├── process-messages/
+│   │   │   └── route.ts      # AI classification (GPT-4)
+│   │   ├── diana/
+│   │   │   └── route.ts      # Diana AI booking assistant
+│   │   ├── stripe/           # Payment webhooks
+│   │   └── auth/             # OAuth callbacks
 │   ├── layout.tsx            # Root layout
 │   └── globals.css           # Global styles
 ├── public/
 │   ├── manifest.json         # PWA manifest
 │   ├── icon-192.png          # App icon (small)
 │   └── icon-512.png          # App icon (large)
+├── supabase/
+│   └── migrations/           # Database migrations
 ├── .env.example              # Environment template
 ├── package.json
 └── README.md
 ```
 
-## API Endpoints Used
+## API Endpoints
 
-All endpoints are on the StyleSync Agent:
+### Local PWA Endpoints
 
-- `POST /auth/register` - User registration
-- `GET /bookings` - Get bookings
-- `POST /sync/manual` - Trigger manual sync
-- `POST /payment/subscribe` - Create Stripe checkout
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/sms-webhook` | POST | Receive SMS from iOS Shortcut. Stores to `raw_messages` immediately. |
+| `/api/sms-webhook` | GET | Check webhook status and message stats for a user. |
+| `/api/process-messages` | POST | AI classification of pending messages (called async). |
+| `/api/diana` | POST | Diana AI assistant queries (booking questions). |
+| `/api/bookings` | GET | Fetch user's bookings from database. |
+| `/api/stripe/webhook` | POST | Stripe payment event webhooks. |
+
+### StyleSync Agent Endpoints
+
+All agent endpoints use query parameter routing (`?action=`):
+
+- `POST ?action=register` - User registration
+- `GET ?action=bookings` - Get bookings
+- `POST ?action=sync` - Trigger manual sync
+- `POST ?action=subscribe` - Create Stripe checkout
+
+### Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `raw_messages` | Stores ALL incoming SMS (zero data loss). AI fields: `message_type`, `processed`, `ai_confidence`. |
+| `clients` | Normalized client data with `aliases` array for fuzzy name matching. |
+| `salon_bookings` | Parsed booking appointments with `client_id` FK and `status` (confirmed/cancelled/rescheduled). |
+| `user_tokens` | User auth tokens and StyleSeat sender numbers. |
 
 ## Todo
 
@@ -245,6 +300,23 @@ All endpoints are on the StyleSync Agent:
 
 ---
 
+---
+
+## Message Types (AI Classification)
+
+The `/api/process-messages` endpoint classifies each SMS into one of these types:
+
+| Type | Description | Action |
+|------|-------------|--------|
+| `new_booking` | New appointment confirmed | Create booking in `salon_bookings` |
+| `cancellation` | Client cancelled appointment | Update booking status to `cancelled` |
+| `reschedule` | Appointment time changed | Update booking with new time |
+| `reminder` | Upcoming appointment reminder | No action (informational) |
+| `confirmation` | Client confirmed attendance | Update status to `confirmed` |
+| `other` | Unrecognized message type | Store for manual review |
+
+---
+
 **Built with:** Next.js + TypeScript + Tailwind CSS
 **Status:** Ready to deploy
-**Last updated:** 2026-01-09
+**Last updated:** 2026-01-16

@@ -8,19 +8,31 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Check if user is already logged in
-    const sessionToken = localStorage.getItem('session_token');
-    if (sessionToken) {
-      router.push('/dashboard');
-    }
+    // Check if user is already logged in (via cookie)
+    const checkSession = async () => {
+      try {
+        const response = await fetch('/api/auth/session');
+        if (response.ok) {
+          const { authenticated } = await response.json();
+          if (authenticated) {
+            router.push('/dashboard');
+            return;
+          }
+        }
+      } catch {
+        // Not authenticated - continue to show login
+      }
 
-    // Check for OAuth callback
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
+      // Check for OAuth callback
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
 
-    if (code) {
-      handleOAuthCallback(code);
-    }
+      if (code) {
+        handleOAuthCallback(code);
+      }
+    };
+
+    checkSession();
   }, [router]);
 
   const handleGoogleLogin = () => {
@@ -44,32 +56,24 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      // Exchange code for tokens via agent
-      const agentResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_AGENT_URL}?action=register`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            code,
-            redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/`,
-          }),
-        }
-      );
+      // Exchange code for tokens via our auth API (sets httpOnly cookie)
+      const response = await fetch('/api/auth/callback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/`,
+        }),
+      });
 
-      if (!agentResponse.ok) {
-        const error = await agentResponse.json();
+      if (!response.ok) {
+        const error = await response.json();
         throw new Error(error.error || 'Registration failed');
       }
 
-      const { user_id, session_token, is_new_user, email } = await agentResponse.json();
-
-      // Store session
-      localStorage.setItem('session_token', session_token);
-      localStorage.setItem('user_id', user_id);
-      localStorage.setItem('user_email', email);
+      const { is_new_user } = await response.json();
 
       // Clean URL and redirect
       window.history.replaceState({}, document.title, '/');
