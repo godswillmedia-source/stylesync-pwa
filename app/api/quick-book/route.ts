@@ -74,14 +74,24 @@ export async function POST(request: NextRequest) {
                            user.refresh_token &&
                            user.refresh_token !== 'pending_ios_oauth';
 
+    console.log('Calendar sync check:', {
+      hasAccessToken: !!user.access_token,
+      accessTokenStart: user.access_token?.substring(0, 20),
+      hasRefreshToken: !!user.refresh_token,
+      refreshTokenStart: user.refresh_token?.substring(0, 20),
+      hasValidTokens,
+    });
+
     if (hasValidTokens) {
       try {
         // Decrypt tokens before using
         const encryptionService = getEncryptionService();
+        console.log('Attempting to decrypt tokens...');
         const decryptedAccessToken = encryptionService.decrypt(user.access_token);
         const decryptedRefreshToken = user.refresh_token
           ? encryptionService.decrypt(user.refresh_token)
           : undefined;
+        console.log('Tokens decrypted successfully');
 
         const calendarService = new CalendarService({
           accessToken: decryptedAccessToken,
@@ -135,10 +145,15 @@ export async function POST(request: NextRequest) {
           .eq('id', booking.id);
 
         console.log('✅ Calendar event created:', googleEventId);
-      } catch (calError) {
-        console.error('Calendar sync failed (booking still created):', calError);
+      } catch (calError: any) {
+        console.error('Calendar sync failed (booking still created):', {
+          error: calError.message,
+          stack: calError.stack,
+        });
         // Don't fail the whole request - booking was created successfully
       }
+    } else {
+      console.log('Skipping calendar sync - no valid tokens');
     }
 
     return NextResponse.json({
