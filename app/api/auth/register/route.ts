@@ -49,7 +49,6 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: userId,
         user_email: email,
-        email: email,
         auth_method: 'ios',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
