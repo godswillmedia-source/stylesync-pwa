@@ -25,11 +25,22 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { data: bookings, error } = await supabase
-      .from('bookings')
-      .select('*')
+    // Get user_id from email
+    const { data: user } = await supabase
+      .from('user_tokens')
+      .select('user_id')
       .eq('user_email', email)
-      .order('booking_date', { ascending: true });
+      .single();
+
+    if (!user) {
+      return NextResponse.json([]);  // No user = no bookings
+    }
+
+    const { data: bookings, error } = await supabase
+      .from('salon_bookings')
+      .select('*')
+      .eq('user_id', user.user_id)
+      .order('appointment_time', { ascending: true });
 
     if (error) {
       console.error('Error fetching bookings:', error);
@@ -40,14 +51,14 @@ export async function GET(req: NextRequest) {
     }
 
     // Transform to match iOS app model
-    const formattedBookings = bookings.map((b) => ({
+    const formattedBookings = (bookings || []).map((b) => ({
       id: b.id,
-      clientName: b.client_name,
+      clientName: b.customer_name,
       service: b.service,
-      date: b.booking_date,
-      duration: b.duration || 60,
-      notes: b.notes,
-      rawMessage: b.raw_message,
+      date: b.appointment_time,
+      duration: b.duration_minutes || 60,
+      notes: null,
+      rawMessage: null,
       createdAt: b.created_at,
     }));
 

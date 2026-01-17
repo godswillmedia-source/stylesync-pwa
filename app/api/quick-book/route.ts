@@ -25,17 +25,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create the booking in the 'bookings' table (same as dashboard uses)
+    // Get user_id from email
+    const { data: user, error: userError } = await supabase
+      .from('user_tokens')
+      .select('user_id')
+      .eq('user_email', user_email)
+      .single();
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { success: false, error: 'User not found. Please sign in first.' },
+        { status: 404 }
+      );
+    }
+
+    // Create the booking in salon_bookings table
     const { data: booking, error: bookingError } = await supabase
-      .from('bookings')
+      .from('salon_bookings')
       .insert({
-        user_email: user_email,
-        client_name: client_name,
+        user_id: user.user_id,
+        customer_name: client_name,
         service: service,
-        booking_date: date_time,
-        duration: 60,
-        notes: notes || null,
-        created_at: new Date().toISOString(),
+        appointment_time: date_time,
+        duration_minutes: 60,
+        is_synced: false,
       })
       .select()
       .single();
