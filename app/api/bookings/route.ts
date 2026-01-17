@@ -50,16 +50,15 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Transform to match iOS app model
+    // Return snake_case format (iOS app expects this)
     const formattedBookings = (bookings || []).map((b) => ({
       id: b.id,
-      clientName: b.customer_name,
+      customer_name: b.customer_name,
       service: b.service,
-      date: b.appointment_time,
-      duration: b.duration_minutes || 60,
-      notes: null,
-      rawMessage: null,
-      createdAt: b.created_at,
+      appointment_time: b.appointment_time,
+      duration_minutes: b.duration_minutes || 60,
+      raw_email: null,
+      created_at: b.created_at,
     }));
 
     return NextResponse.json(formattedBookings);
