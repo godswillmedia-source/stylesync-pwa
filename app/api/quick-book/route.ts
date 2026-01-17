@@ -162,6 +162,10 @@ export async function POST(request: NextRequest) {
       message: `Booking created for ${client_name}`,
       calendar_synced: calendarSynced,
       google_event_id: googleEventId,
+      debug: {
+        hasValidTokens,
+        tokenPreview: user.access_token?.substring(0, 20),
+      },
     });
 
   } catch (error) {
