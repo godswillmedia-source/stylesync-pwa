@@ -116,19 +116,26 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Calculate end time (1 hour from start)
-        const endTime = CalendarService.calculateEndTime(date_time, 60);
+        // Parse and format dates properly for Google Calendar
+        const startDate = new Date(date_time);
+        const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1 hour later
+
+        // Format as ISO strings (Google Calendar expects this)
+        const startISO = startDate.toISOString();
+        const endISO = endDate.toISOString();
+
+        console.log('Calendar event dates:', { startISO, endISO, original: date_time });
 
         // Create calendar event
         const event = await calendarService.createEvent({
           summary: `${service} - ${client_name}`,
           description: `StyleSync booking\nService: ${service}\nClient: ${client_name}`,
           start: {
-            dateTime: date_time,
+            dateTime: startISO,
             timeZone: 'America/New_York',
           },
           end: {
-            dateTime: endTime,
+            dateTime: endISO,
             timeZone: 'America/New_York',
           },
         });
