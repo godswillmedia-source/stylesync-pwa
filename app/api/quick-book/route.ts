@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
     // Sync to Google Calendar if user has valid tokens
     let calendarSynced = false;
     let googleEventId: string | null = null;
+    let calendarError: string | null = null;
 
     // Check for valid (non-placeholder) tokens
     const hasValidTokens = user.access_token &&
@@ -146,6 +147,7 @@ export async function POST(request: NextRequest) {
 
         console.log('✅ Calendar event created:', googleEventId);
       } catch (calError: any) {
+        calendarError = calError.message;
         console.error('Calendar sync failed (booking still created):', {
           error: calError.message,
           stack: calError.stack,
@@ -165,6 +167,7 @@ export async function POST(request: NextRequest) {
       debug: {
         hasValidTokens,
         tokenPreview: user.access_token?.substring(0, 20),
+        calendarError,
       },
     });
 
