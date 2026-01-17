@@ -16,7 +16,7 @@ const supabase = createClient(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { user_email, client_name, service, date_time, notes } = body;
+    const { user_email, client_name, service, date_time } = body;
 
     if (!user_email || !client_name || !service || !date_time) {
       return NextResponse.json(
@@ -48,8 +48,7 @@ export async function POST(request: NextRequest) {
         service: service,
         appointment_time: date_time,
         duration_minutes: 60,
-        notes: notes || null,
-        status: 'confirmed',
+        is_synced: false,
       })
       .select()
       .single();
