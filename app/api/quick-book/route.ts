@@ -16,7 +16,7 @@ const supabase = createClient(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { user_email, client_name, service, date_time } = body;
+    const { user_email, client_name, service, date_time, notes } = body;
 
     if (!user_email || !client_name || !service || !date_time) {
       return NextResponse.json(
@@ -25,30 +25,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user_id from email
-    const { data: user, error: userError } = await supabase
-      .from('user_tokens')
-      .select('user_id')
-      .eq('user_email', user_email)
-      .single();
-
-    if (userError || !user) {
-      return NextResponse.json(
-        { success: false, error: 'User not found' },
-        { status: 404 }
-      );
-    }
-
-    // Create the booking
+    // Create the booking in the 'bookings' table (same as dashboard uses)
     const { data: booking, error: bookingError } = await supabase
-      .from('salon_bookings')
+      .from('bookings')
       .insert({
-        user_id: user.user_id,
-        customer_name: client_name,
+        user_email: user_email,
+        client_name: client_name,
         service: service,
-        appointment_time: date_time,
-        duration_minutes: 60,
-        is_synced: false,
+        booking_date: date_time,
+        duration: 60,
+        notes: notes || null,
+        created_at: new Date().toISOString(),
       })
       .select()
       .single();
@@ -62,7 +49,6 @@ export async function POST(request: NextRequest) {
     }
 
     // TODO: Sync to Google Calendar if user has calendar connected
-    // This would call the calendar sync service
 
     return NextResponse.json({
       success: true,
