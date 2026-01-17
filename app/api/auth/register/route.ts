@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
         user_email: email,
         auth_method: 'ios',
         access_token: 'pending_ios_oauth',  // Placeholder until calendar connected
+        refresh_token: 'pending_ios_oauth',  // Placeholder until calendar connected
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
